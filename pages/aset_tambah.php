@@ -39,17 +39,36 @@ if (isset($_POST['simpan'])) {
         $dokumen = $file_name;
     }
 
+    $kode_aset = trim($_POST['kode_aset'] ?? '');
+    if (!empty($kode_aset)) {
+        $kode_aset = mysqli_real_escape_string($koneksi, $kode_aset);
+    }
+
+    $tingkat_prioritas = mysqli_real_escape_string($koneksi, $_POST['tingkat_prioritas'] ?? 'Penting');
+
     // Perhatikan: Kolom 'kondisi' tidak kita insert lagi, diganti dengan rincian stok
-    $query = "INSERT INTO aset (nama_aset, kategori_aset, jenis, tipe_aset, lokasi, asal_usul, harga, umur_ekonomis, tanggal_masuk, dokumen, total_stok, stok_tersedia, stok_rusak, stok_perawatan) 
-              VALUES ('$nama_aset', '$kategori_aset', '$jenis', '$tipe_aset', '$lokasi', '$asal_usul', '$harga', '$umur_ekonomis', '$tanggal_masuk', '$dokumen', '$total_stok', '$stok_tersedia', '$stok_rusak', '$stok_perawatan')";
+    $query = "INSERT INTO aset (kode_aset, nama_aset, kategori_aset, tingkat_prioritas, jenis, tipe_aset, lokasi, asal_usul, harga, umur_ekonomis, tanggal_masuk, dokumen, total_stok, stok_tersedia, stok_rusak, stok_perawatan) 
+              VALUES ('$kode_aset', '$nama_aset', '$kategori_aset', '$tingkat_prioritas', '$jenis', '$tipe_aset', '$lokasi', '$asal_usul', '$harga', '$umur_ekonomis', '$tanggal_masuk', '$dokumen', '$total_stok', '$stok_tersedia', '$stok_rusak', '$stok_perawatan')";
 
     if (mysqli_query($koneksi, $query)) {
+        $new_id = mysqli_insert_id($koneksi);
+        if (empty($kode_aset)) {
+            $prefix = ($kategori_aset == 'Medis') ? 'RSB-MED' : 'RSB-NON';
+            $genKode = sprintf("%s-%03d", $prefix, $new_id);
+            mysqli_query($koneksi, "UPDATE aset SET kode_aset = '$genKode' WHERE id_aset = $new_id");
+        }
+        // Catat penempatan awal di riwayat_lokasi
+        $pj = mysqli_real_escape_string($koneksi, $_SESSION['nama_pengguna'] ?? 'Petugas');
+        mysqli_query($koneksi, "INSERT INTO riwayat_lokasi (id_aset, lokasi_sebelumnya, lokasi_baru, tanggal_pindah, keterangan, penanggung_jawab) 
+            VALUES ($new_id, 'Pengadaan Baru', '$lokasi', NOW(), 'Penempatan awal pengadaan aset', '$pj')");
+
         echo "<script>alert('Data aset berhasil ditambahkan!'); window.location='aset.php';</script>";
     } else {
         echo "<script>alert('Gagal menambahkan data! Pastikan kolom stok_tersedia dll sudah ada di database.');</script>";
     }
 }
 ?>
+
 
 <!DOCTYPE html>
 <html lang="id">
@@ -142,7 +161,12 @@ if (isset($_POST['simpan'])) {
                         <form method="POST" enctype="multipart/form-data">
                             <div class="row">
                                 <div class="col-md-6 mb-3">
-                                    <label class="form-label">Nama Aset / Alat</label>
+                                    <label class="form-label">Kode Aset <small class="text-muted">(Opsional / Auto-Generate)</small></label>
+                                    <input type="text" name="kode_aset" class="form-control" placeholder="Contoh: RSB-MED-035 (Kosongkan jika ingin otomatis)">
+                                </div>
+
+                                <div class="col-md-6 mb-3">
+                                    <label class="form-label">Nama Aset / Alat <span class="text-danger">*</span></label>
                                     <input type="text" name="nama_aset" class="form-control" required placeholder="Contoh: Mesin EKG">
                                 </div>
                                 <div class="col-md-6 mb-3">
@@ -152,6 +176,15 @@ if (isset($_POST['simpan'])) {
                                         <option value="Medis">Medis (Alat Kesehatan)</option>
                                         <option value="Non-Medis">Non-Medis (Infrastruktur Umum)</option>
                                     </select>
+                                </div>
+                                <div class="col-md-6 mb-3">
+                                    <label class="form-label fw-bold">Tingkat Prioritas / Kritikalitas Pelayanan <span class="text-danger">*</span></label>
+                                    <select name="tingkat_prioritas" class="form-select" required>
+                                        <option value="Kritis">🔴 Kritis (Life-Support / Pelayanan Vital - Respon < 2 Jam)</option>
+                                        <option value="Penting" selected>🟡 Penting (Peralatan Diagnostik - Respon < 24 Jam)</option>
+                                        <option value="Rutin">⚪ Rutin (Fasilitas Penunjang Umum - Respon 1-3 Hari)</option>
+                                    </select>
+                                    <small class="text-muted">Aset <strong>Kritis</strong> otomatis diprioritaskan di antrean pemeliharaan & perbaikan.</small>
                                 </div>
                                 <div class="col-md-6 mb-3">
                                     <label class="form-label">Jenis Aset</label>

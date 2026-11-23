@@ -137,6 +137,7 @@ if (isset($_POST['update'])) {
                                     <option value="admin" <?= ($user['level'] == 'admin') ? 'selected' : '' ?>>Admin</option>
                                     <option value="pegawai" <?= ($user['level'] == 'pegawai') ? 'selected' : '' ?>>Pegawai</option>
                                     <option value="teknisi" <?= ($user['level'] == 'teknisi') ? 'selected' : '' ?>>Teknisi</option>
+                                    <option value="keuangan" <?= ($user['level'] == 'keuangan') ? 'selected' : '' ?>>Keuangan</option>
                                 </select>
                             </div>
                             <div class="col-md-6 mb-3">

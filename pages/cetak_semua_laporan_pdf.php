@@ -8,6 +8,7 @@ if (!isset($_SESSION['id_pengguna'])) {
 ob_clean(); // Mencegah error biner PDF corrupt
 require(__DIR__ . '/../config/fpdf.php');
 include(__DIR__ . '/../config/koneksi.php');
+require_once(__DIR__ . '/../config/ttd_helper.php');
 
 $tahun_filter = isset($_GET['tahun']) ? (int)$_GET['tahun'] : '';
 
@@ -17,32 +18,16 @@ $pdf->AddPage();
 $pdf->SetMargins(10, 10, 10);
 $pdf->SetAutoPageBreak(false);
 
-// ==================== KOP SURAT (Hanya Tampil Sekali di Halaman 1) ==================== //
-$y_kop = 8;
-$logoLeft  = realpath(__DIR__ . '/../assets/img/logo_dokpol.png');
-$logoRight = realpath(__DIR__ . '/../assets/img/logo_rs.jpg');
-if ($logoLeft && file_exists($logoLeft))  $pdf->Image($logoLeft, 15, $y_kop, 22);
-if ($logoRight && file_exists($logoRight)) $pdf->Image($logoRight, 260, $y_kop, 22);
+// ==================== KOP SURAT RESMI POLRI ==================== //
+renderOfficialKopSurat($pdf, 'L');
 
-$pdf->SetFont('Arial', 'B', 16);
-$pdf->SetXY(0, $y_kop + 3);
-$pdf->Cell(0, 10, 'RUMKIT BHAYANGKARA TK. III BANJARMASIN', 0, 1, 'C');
-$pdf->SetFont('Arial', '', 11);
-$pdf->Cell(0, 6, 'Jl. A. Yani Km. 3,5 Banjarmasin 70235', 0, 1, 'C');
-$pdf->Ln(5);
-
-$pdf->SetLineWidth(0.5);
-$pdf->Line(10, $pdf->GetY(), 287, $pdf->GetY());
-$pdf->Ln(5);
-
-$pdf->SetFont('Arial', 'B', 14);
-$pdf->Cell(0, 8, 'LAPORAN REKAPITULASI SEMUA DATA', 0, 1, 'C');
+$pdf->SetFont('Arial', 'B', 13);
+$pdf->Cell(0, 7, 'LAPORAN REKAPITULASI KESELURUHAN DATA ASET & FASILITAS (17 LAPORAN)', 0, 1, 'C');
 if ($tahun_filter != '') {
-    $pdf->SetFont('Arial', 'I', 10);
+    $pdf->SetFont('Arial', 'I', 9.5);
     $pdf->Cell(0, 5, 'Periode Registrasi Tahun: ' . $tahun_filter, 0, 1, 'C');
 }
-$pdf->Ln(6);
-
+$pdf->Ln(4);
 
 // =========================================================================
 // SECTION 1: LAPORAN ASET 
@@ -1005,24 +990,608 @@ if (mysqli_num_rows($res_pindah) == 0) {
 $pdf->Ln(10);
 
 
-// ==================== AREA TANDA TANGAN PIMPINAN ==================== //
-if ($pdf->GetY() > 155) $pdf->AddPage();
+// =========================================================================
+// SECTION 11: LAPORAN INFRASTRUKTUR (GEDUNG & KAMAR)
+// =========================================================================
+$w_infra = [8, 22, 52, 32, 45, 24, 22, 28, 44];
+$header_infra = ['No', 'Kode', 'Nama Infrastruktur', 'Kategori', 'Gedung / Lt', 'Kapasitas', 'Luas', 'Kondisi', 'P. Jawab'];
 
+function cetakHeaderInfraSemua($pdf, $w, $header)
+{
+    $pdf->SetFont('Arial', 'B', 7.5);
+    $pdf->SetFillColor(72, 201, 176);
+    $pdf->SetTextColor(255);
+    for ($i = 0; $i < count($header); $i++) {
+        $pdf->Cell($w[$i], 8, $header[$i], 1, 0, 'C', true);
+    }
+    $pdf->Ln();
+    $pdf->SetFont('Arial', '', 7);
+    $pdf->SetTextColor(0);
+}
+
+if ($pdf->GetY() + 25 > 185) $pdf->AddPage();
+$pdf->SetFont('Arial', 'B', 11);
+$pdf->Cell(0, 8, '11. LAPORAN INFRASTRUKTUR (GEDUNG, RUANGAN & KAMAR)', 0, 1, 'L');
+cetakHeaderInfraSemua($pdf, $w_infra, $header_infra);
+
+$where_infra = [];
+if (!empty($tahun_filter)) $where_infra[] = "YEAR(created_at) = '$tahun_filter'";
+$whereSQL_infra = count($where_infra) > 0 ? "WHERE " . implode(" AND ", $where_infra) : "";
+
+$sql_infra = "SELECT * FROM infrastruktur $whereSQL_infra ORDER BY id_infrastruktur DESC";
+$res_infra = mysqli_query($koneksi, $sql_infra);
+
+if (mysqli_num_rows($res_infra) == 0) {
+    $pdf->Cell(277, 8, 'Tidak ada data infrastruktur.', 1, 1, 'C');
+} else {
+    $no_infra = 1;
+    while ($r = mysqli_fetch_assoc($res_infra)) {
+        $nama_infra = $r['nama_infrastruktur'] ?? '-';
+        $kat_infra  = $r['kategori'] ?? '-';
+        $gedung_lt  = ($r['nama_gedung'] ?? '-') . (!empty($r['lantai']) ? ' / Lt ' . $r['lantai'] : '');
+        $kapasitas  = ($r['kapasitas'] ?? '0') . ' Orang';
+        $luas       = ($r['luas_area'] ?? '-') . ' m2';
+        $kondisi    = $r['kondisi'] ?? '-';
+        $pj         = $r['penanggung_jawab'] ?? '-';
+
+        $maxLine = max(2, ceil(strlen($nama_infra) / 28), ceil(strlen($gedung_lt) / 22), ceil(strlen($pj) / 22));
+        $tinggi = ($maxLine * 4.5) + 3;
+
+        if ($pdf->GetY() + $tinggi > 185) {
+            $pdf->AddPage();
+            cetakHeaderInfraSemua($pdf, $w_infra, $header_infra);
+        }
+
+        $x = $pdf->GetX();
+        $y = $pdf->GetY();
+        $currX = $x;
+        for ($i = 0; $i < count($w_infra); $i++) {
+            $pdf->Rect($currX, $y, $w_infra[$i], $tinggi);
+            $currX += $w_infra[$i];
+        }
+
+        $pdf->SetXY($x, $y + 1.5);
+        $pdf->Cell($w_infra[0], 4, $no_infra++, 0, 0, 'C');
+        $pdf->SetXY($x + $w_infra[0] + 1, $y + 1.5);
+        $pdf->Cell($w_infra[1] - 2, 4, $r['kode_infrastruktur'] ?? '-', 0, 0, 'C');
+        $pdf->SetXY($x + $w_infra[0] + $w_infra[1] + 1, $y + 1.5);
+        $pdf->MultiCell($w_infra[2] - 2, 4, $nama_infra, 0, 'L');
+        $pdf->SetXY($x + $w_infra[0] + $w_infra[1] + $w_infra[2] + 1, $y + 1.5);
+        $pdf->Cell($w_infra[3] - 2, 4, $kat_infra, 0, 0, 'C');
+        $pdf->SetXY($x + $w_infra[0] + $w_infra[1] + $w_infra[2] + $w_infra[3] + 1, $y + 1.5);
+        $pdf->MultiCell($w_infra[4] - 2, 4, $gedung_lt, 0, 'L');
+        $pdf->SetXY($x + $w_infra[0] + $w_infra[1] + $w_infra[2] + $w_infra[3] + $w_infra[4] + 1, $y + 1.5);
+        $pdf->Cell($w_infra[5] - 2, 4, $kapasitas, 0, 0, 'C');
+        $pdf->SetXY($x + $w_infra[0] + $w_infra[1] + $w_infra[2] + $w_infra[3] + $w_infra[4] + $w_infra[5] + 1, $y + 1.5);
+        $pdf->Cell($w_infra[6] - 2, 4, $luas, 0, 0, 'C');
+        $pdf->SetXY($x + $w_infra[0] + $w_infra[1] + $w_infra[2] + $w_infra[3] + $w_infra[4] + $w_infra[5] + $w_infra[6] + 1, $y + 1.5);
+        $pdf->Cell($w_infra[7] - 2, 4, $kondisi, 0, 0, 'C');
+        $pdf->SetXY($x + $w_infra[0] + $w_infra[1] + $w_infra[2] + $w_infra[3] + $w_infra[4] + $w_infra[5] + $w_infra[6] + $w_infra[7] + 1, $y + 1.5);
+        $pdf->MultiCell($w_infra[8] - 2, 4, $pj, 0, 'L');
+
+        $pdf->SetY($y + $tinggi);
+    }
+}
+$pdf->Ln(6);
+
+
+// =========================================================================
+// SECTION 12: LAPORAN PENYUSUTAN NILAI ASET (PER PERIODE)
+// =========================================================================
+$w_susut = [8, 22, 55, 22, 35, 30, 15, 30, 30, 30];
+$header_susut = ['No', 'Kode', 'Nama Aset', 'Kategori', 'Lokasi Ruangan', 'Perolehan (Rp)', 'Umur', 'Beban/Thn', 'Akumulasi', 'Nilai Buku'];
+
+function cetakHeaderSusutSemua($pdf, $w, $header)
+{
+    $pdf->SetFont('Arial', 'B', 7.5);
+    $pdf->SetFillColor(72, 201, 176);
+    $pdf->SetTextColor(255);
+    for ($i = 0; $i < count($header); $i++) {
+        $pdf->Cell($w[$i], 8, $header[$i], 1, 0, 'C', true);
+    }
+    $pdf->Ln();
+    $pdf->SetFont('Arial', '', 7);
+    $pdf->SetTextColor(0);
+}
+
+if ($pdf->GetY() + 25 > 185) $pdf->AddPage();
+$pdf->SetFont('Arial', 'B', 11);
+$pdf->Cell(0, 8, '12. LAPORAN PENYUSUTAN NILAI ASET (DEPRESIASI GARIS LURUS)', 0, 1, 'L');
+cetakHeaderSusutSemua($pdf, $w_susut, $header_susut);
+
+$where_susut = ["harga > 0"];
+if (!empty($tahun_filter)) $where_susut[] = "YEAR(tanggal_masuk) <= '$tahun_filter'";
+$whereSQL_susut = "WHERE " . implode(" AND ", $where_susut);
+
+$sql_susut = "SELECT * FROM aset $whereSQL_susut ORDER BY id_aset DESC";
+$res_susut = mysqli_query($koneksi, $sql_susut);
+
+if (mysqli_num_rows($res_susut) == 0) {
+    $pdf->Cell(277, 8, 'Tidak ada data penyusutan aset.', 1, 1, 'C');
+} else {
+    $no_susut = 1;
+    $thnHitung = !empty($tahun_filter) ? $tahun_filter : (int)date('Y');
+    while ($r = mysqli_fetch_assoc($res_susut)) {
+        $umur = max(1, (int)($r['umur_ekonomis'] ?? 5));
+        $thnMasuk = (int)date('Y', strtotime($r['tanggal_masuk'] ?? date('Y-m-d')));
+        $umurPakai = max(0, $thnHitung - $thnMasuk);
+        $harga = (float)$r['harga'];
+        $bebanThn = $harga / $umur;
+        $akum = min($harga, $bebanThn * $umurPakai);
+        $nilaiBuku = max(0, $harga - $akum);
+
+        $maxLine = max(2, ceil(strlen($r['nama_aset']) / 30), ceil(strlen($r['lokasi']) / 20));
+        $tinggi = ($maxLine * 4.5) + 3;
+
+        if ($pdf->GetY() + $tinggi > 185) {
+            $pdf->AddPage();
+            cetakHeaderSusutSemua($pdf, $w_susut, $header_susut);
+        }
+
+        $x = $pdf->GetX();
+        $y = $pdf->GetY();
+        $currX = $x;
+        for ($i = 0; $i < count($w_susut); $i++) {
+            $pdf->Rect($currX, $y, $w_susut[$i], $tinggi);
+            $currX += $w_susut[$i];
+        }
+
+        $pdf->SetXY($x, $y + 1.5);
+        $pdf->Cell($w_susut[0], 4, $no_susut++, 0, 0, 'C');
+        $pdf->SetXY($x + $w_susut[0] + 1, $y + 1.5);
+        $pdf->Cell($w_susut[1] - 2, 4, $r['kode_aset'] ?? '-', 0, 0, 'C');
+        $pdf->SetXY($x + $w_susut[0] + $w_susut[1] + 1, $y + 1.5);
+        $pdf->MultiCell($w_susut[2] - 2, 4, $r['nama_aset'], 0, 'L');
+        $pdf->SetXY($x + $w_susut[0] + $w_susut[1] + $w_susut[2] + 1, $y + 1.5);
+        $pdf->Cell($w_susut[3] - 2, 4, $r['kategori_aset'], 0, 0, 'C');
+        $pdf->SetXY($x + $w_susut[0] + $w_susut[1] + $w_susut[2] + $w_susut[3] + 1, $y + 1.5);
+        $pdf->MultiCell($w_susut[4] - 2, 4, $r['lokasi'], 0, 'L');
+        $pdf->SetXY($x + $w_susut[0] + $w_susut[1] + $w_susut[2] + $w_susut[3] + $w_susut[4] + 1, $y + 1.5);
+        $pdf->Cell($w_susut[5] - 2, 4, 'Rp ' . number_format($harga, 0, ',', '.'), 0, 0, 'R');
+        $pdf->SetXY($x + $w_susut[0] + $w_susut[1] + $w_susut[2] + $w_susut[3] + $w_susut[4] + $w_susut[5] + 1, $y + 1.5);
+        $pdf->Cell($w_susut[6] - 2, 4, $umur . ' Th', 0, 0, 'C');
+        $pdf->SetXY($x + $w_susut[0] + $w_susut[1] + $w_susut[2] + $w_susut[3] + $w_susut[4] + $w_susut[5] + $w_susut[6] + 1, $y + 1.5);
+        $pdf->Cell($w_susut[7] - 2, 4, 'Rp ' . number_format($bebanThn, 0, ',', '.'), 0, 0, 'R');
+        $pdf->SetXY($x + $w_susut[0] + $w_susut[1] + $w_susut[2] + $w_susut[3] + $w_susut[4] + $w_susut[5] + $w_susut[6] + $w_susut[7] + 1, $y + 1.5);
+        $pdf->Cell($w_susut[8] - 2, 4, 'Rp ' . number_format($akum, 0, ',', '.'), 0, 0, 'R');
+        $pdf->SetXY($x + $w_susut[0] + $w_susut[1] + $w_susut[2] + $w_susut[3] + $w_susut[4] + $w_susut[5] + $w_susut[6] + $w_susut[7] + $w_susut[8] + 1, $y + 1.5);
+        $pdf->Cell($w_susut[9] - 2, 4, 'Rp ' . number_format($nilaiBuku, 0, ',', '.'), 0, 0, 'R');
+
+        $pdf->SetY($y + $tinggi);
+    }
+}
+$pdf->Ln(6);
+
+
+// =========================================================================
+// SECTION 13: LAPORAN HASIL STOCK OPNAME (SISTEM VS FISIK)
+// =========================================================================
+$w_so = [8, 22, 24, 55, 35, 20, 20, 18, 35, 40];
+$header_so = ['No', 'Tgl Opname', 'Kode Opname', 'Nama Aset', 'Lokasi', 'Sistem', 'Fisik', 'Selisih', 'Kondisi Fisik', 'Petugas'];
+
+function cetakHeaderSOSemua($pdf, $w, $header)
+{
+    $pdf->SetFont('Arial', 'B', 7.5);
+    $pdf->SetFillColor(72, 201, 176);
+    $pdf->SetTextColor(255);
+    for ($i = 0; $i < count($header); $i++) {
+        $pdf->Cell($w[$i], 8, $header[$i], 1, 0, 'C', true);
+    }
+    $pdf->Ln();
+    $pdf->SetFont('Arial', '', 7);
+    $pdf->SetTextColor(0);
+}
+
+if ($pdf->GetY() + 25 > 185) $pdf->AddPage();
+$pdf->SetFont('Arial', 'B', 11);
+$pdf->Cell(0, 8, '13. LAPORAN HASIL STOCK OPNAME (SISTEM VS FISIK)', 0, 1, 'L');
+cetakHeaderSOSemua($pdf, $w_so, $header_so);
+
+$where_so = [];
+if (!empty($tahun_filter)) $where_so[] = "YEAR(s.tanggal_opname) = '$tahun_filter'";
+$whereSQL_so = count($where_so) > 0 ? "WHERE " . implode(" AND ", $where_so) : "";
+
+$sql_so = "SELECT s.*, a.nama_aset, a.lokasi as lokasi_master 
+           FROM stock_opname s 
+           LEFT JOIN aset a ON s.id_aset = a.id_aset 
+           $whereSQL_so 
+           ORDER BY s.id_opname DESC";
+$res_so = mysqli_query($koneksi, $sql_so);
+
+if (mysqli_num_rows($res_so) == 0) {
+    $pdf->Cell(277, 8, 'Tidak ada data stock opname aset.', 1, 1, 'C');
+} else {
+    $no_so = 1;
+    while ($r = mysqli_fetch_assoc($res_so)) {
+        $tgl_so = ($r['tanggal_opname'] && $r['tanggal_opname'] != '0000-00-00') ? date('d-m-Y', strtotime($r['tanggal_opname'])) : '-';
+        $nama_aset = $r['nama_aset'] ?? '-';
+        $lokasi = !empty($r['lokasi_opname']) ? $r['lokasi_opname'] : ($r['lokasi_master'] ?? '-');
+        $petugas = $r['petugas_opname'] ?? '-';
+
+        $maxLine = max(2, ceil(strlen($nama_aset) / 28), ceil(strlen($lokasi) / 20), ceil(strlen($petugas) / 20));
+        $tinggi = ($maxLine * 4.5) + 3;
+
+        if ($pdf->GetY() + $tinggi > 185) {
+            $pdf->AddPage();
+            cetakHeaderSOSemua($pdf, $w_so, $header_so);
+        }
+
+        $x = $pdf->GetX();
+        $y = $pdf->GetY();
+        $currX = $x;
+        for ($i = 0; $i < count($w_so); $i++) {
+            $pdf->Rect($currX, $y, $w_so[$i], $tinggi);
+            $currX += $w_so[$i];
+        }
+
+        $pdf->SetXY($x, $y + 1.5);
+        $pdf->Cell($w_so[0], 4, $no_so++, 0, 0, 'C');
+        $pdf->SetXY($x + $w_so[0] + 1, $y + 1.5);
+        $pdf->Cell($w_so[1] - 2, 4, $tgl_so, 0, 0, 'C');
+        $pdf->SetXY($x + $w_so[0] + $w_so[1] + 1, $y + 1.5);
+        $pdf->Cell($w_so[2] - 2, 4, $r['kode_opname'] ?? '-', 0, 0, 'C');
+        $pdf->SetXY($x + $w_so[0] + $w_so[1] + $w_so[2] + 1, $y + 1.5);
+        $pdf->MultiCell($w_so[3] - 2, 4, $nama_aset, 0, 'L');
+        $pdf->SetXY($x + $w_so[0] + $w_so[1] + $w_so[2] + $w_so[3] + 1, $y + 1.5);
+        $pdf->MultiCell($w_so[4] - 2, 4, $lokasi, 0, 'L');
+        $pdf->SetXY($x + $w_so[0] + $w_so[1] + $w_so[2] + $w_so[3] + $w_so[4] + 1, $y + 1.5);
+        $pdf->Cell($w_so[5] - 2, 4, $r['stok_sistem'] ?? '0', 0, 0, 'C');
+        $pdf->SetXY($x + $w_so[0] + $w_so[1] + $w_so[2] + $w_so[3] + $w_so[4] + $w_so[5] + 1, $y + 1.5);
+        $pdf->Cell($w_so[6] - 2, 4, $r['stok_fisik'] ?? '0', 0, 0, 'C');
+        $pdf->SetXY($x + $w_so[0] + $w_so[1] + $w_so[2] + $w_so[3] + $w_so[4] + $w_so[5] + $w_so[6] + 1, $y + 1.5);
+        $pdf->Cell($w_so[7] - 2, 4, $r['selisih'] ?? '0', 0, 0, 'C');
+        $pdf->SetXY($x + $w_so[0] + $w_so[1] + $w_so[2] + $w_so[3] + $w_so[4] + $w_so[5] + $w_so[6] + $w_so[7] + 1, $y + 1.5);
+        $pdf->Cell($w_so[8] - 2, 4, $r['kondisi_fisik'] ?? 'Sesuai', 0, 0, 'C');
+        $pdf->SetXY($x + $w_so[0] + $w_so[1] + $w_so[2] + $w_so[3] + $w_so[4] + $w_so[5] + $w_so[6] + $w_so[7] + $w_so[8] + 1, $y + 1.5);
+        $pdf->MultiCell($w_so[9] - 2, 4, $petugas, 0, 'L');
+
+        $pdf->SetY($y + $tinggi);
+    }
+}
+$pdf->Ln(6);
+
+
+// =========================================================================
+// SECTION 14: KARTU INVENTARIS RUANGAN (KIR) & SEBARAN ASET
+// =========================================================================
+$w_kir = [8, 60, 25, 25, 25, 25, 25, 24, 60];
+$header_kir = ['No', 'Nama Ruangan / Unit Kerja', 'Jenis Aset', 'Total Unit', 'Kondisi Baik', 'Rusak', 'Servis', 'Keandalan', 'Total Nilai Aset (Rp)'];
+
+function cetakHeaderKIRSemua($pdf, $w, $header)
+{
+    $pdf->SetFont('Arial', 'B', 7.5);
+    $pdf->SetFillColor(72, 201, 176);
+    $pdf->SetTextColor(255);
+    for ($i = 0; $i < count($header); $i++) {
+        $pdf->Cell($w[$i], 8, $header[$i], 1, 0, 'C', true);
+    }
+    $pdf->Ln();
+    $pdf->SetFont('Arial', '', 7);
+    $pdf->SetTextColor(0);
+}
+
+if ($pdf->GetY() + 25 > 185) $pdf->AddPage();
+$pdf->SetFont('Arial', 'B', 11);
+$pdf->Cell(0, 8, '14. KARTU INVENTARIS RUANGAN (KIR) & REKAP SEBARAN ASET', 0, 1, 'L');
+cetakHeaderKIRSemua($pdf, $w_kir, $header_kir);
+
+$sql_kir = "SELECT 
+    lokasi, 
+    COUNT(*) as total_jenis,
+    SUM(total_stok) as total_unit,
+    SUM(stok_tersedia) as unit_baik,
+    SUM(stok_rusak) as unit_rusak,
+    SUM(stok_perawatan) as unit_rawat,
+    SUM(harga * total_stok) as total_nilai
+FROM aset 
+WHERE lokasi IS NOT NULL AND lokasi != ''
+GROUP BY lokasi 
+ORDER BY total_nilai DESC, lokasi ASC";
+$res_kir = mysqli_query($koneksi, $sql_kir);
+
+if (mysqli_num_rows($res_kir) == 0) {
+    $pdf->Cell(277, 8, 'Tidak ada data sebaran ruangan.', 1, 1, 'C');
+} else {
+    $no_kir = 1;
+    while ($r = mysqli_fetch_assoc($res_kir)) {
+        $totUnit = (int)$r['total_unit'];
+        $uBaik = (int)$r['unit_baik'];
+        $persen = $totUnit > 0 ? round(($uBaik / $totUnit) * 100, 1) . '%' : '100%';
+
+        $maxLine = max(1, ceil(strlen($r['lokasi']) / 35));
+        $tinggi = ($maxLine * 4.5) + 3;
+
+        if ($pdf->GetY() + $tinggi > 185) {
+            $pdf->AddPage();
+            cetakHeaderKIRSemua($pdf, $w_kir, $header_kir);
+        }
+
+        $x = $pdf->GetX();
+        $y = $pdf->GetY();
+        $currX = $x;
+        for ($i = 0; $i < count($w_kir); $i++) {
+            $pdf->Rect($currX, $y, $w_kir[$i], $tinggi);
+            $currX += $w_kir[$i];
+        }
+
+        $pdf->SetXY($x, $y + 1.5);
+        $pdf->Cell($w_kir[0], 4, $no_kir++, 0, 0, 'C');
+        $pdf->SetXY($x + $w_kir[0] + 1, $y + 1.5);
+        $pdf->MultiCell($w_kir[1] - 2, 4, $r['lokasi'], 0, 'L');
+        $pdf->SetXY($x + $w_kir[0] + $w_kir[1] + 1, $y + 1.5);
+        $pdf->Cell($w_kir[2] - 2, 4, $r['total_jenis'] . ' Item', 0, 0, 'C');
+        $pdf->SetXY($x + $w_kir[0] + $w_kir[1] + $w_kir[2] + 1, $y + 1.5);
+        $pdf->Cell($w_kir[3] - 2, 4, $totUnit . ' Unit', 0, 0, 'C');
+        $pdf->SetXY($x + $w_kir[0] + $w_kir[1] + $w_kir[2] + $w_kir[3] + 1, $y + 1.5);
+        $pdf->Cell($w_kir[4] - 2, 4, $uBaik . ' Unit', 0, 0, 'C');
+        $pdf->SetXY($x + $w_kir[0] + $w_kir[1] + $w_kir[2] + $w_kir[3] + $w_kir[4] + 1, $y + 1.5);
+        $pdf->Cell($w_kir[5] - 2, 4, ($r['unit_rusak'] ?? 0) . ' Unit', 0, 0, 'C');
+        $pdf->SetXY($x + $w_kir[0] + $w_kir[1] + $w_kir[2] + $w_kir[3] + $w_kir[4] + $w_kir[5] + 1, $y + 1.5);
+        $pdf->Cell($w_kir[6] - 2, 4, ($r['unit_rawat'] ?? 0) . ' Unit', 0, 0, 'C');
+        $pdf->SetXY($x + $w_kir[0] + $w_kir[1] + $w_kir[2] + $w_kir[3] + $w_kir[4] + $w_kir[5] + 1, $y + 1.5);
+        $pdf->Cell($w_kir[7] - 2, 4, $persen, 0, 0, 'C');
+        $pdf->SetXY($x + $w_kir[0] + $w_kir[1] + $w_kir[2] + $w_kir[3] + $w_kir[4] + $w_kir[5] + $w_kir[6] + $w_kir[7] + 1, $y + 1.5);
+        $pdf->Cell($w_kir[8] - 2, 4, 'Rp ' . number_format((float)$r['total_nilai'], 0, ',', '.'), 0, 0, 'R');
+
+        $pdf->SetY($y + $tinggi);
+    }
+}
+$pdf->Ln(6);
+
+
+// =========================================================================
+// SECTION 15: LAPORAN ANALISIS ASET & REKOMENDASI ANGGARAN (DSS)
+// =========================================================================
+$w_dss = [8, 25, 60, 45, 20, 25, 40, 54];
+$header_dss = ['No', 'Kode Aset', 'Nama Barang / Alkes', 'Lokasi Ruangan', 'Thn Masuk', 'Sisa Umur', 'Estimasi Anggaran', 'Rekomendasi Keputusan'];
+
+function cetakHeaderDSSSemua($pdf, $w, $header)
+{
+    $pdf->SetFont('Arial', 'B', 7.5);
+    $pdf->SetFillColor(72, 201, 176);
+    $pdf->SetTextColor(255);
+    for ($i = 0; $i < count($header); $i++) {
+        $pdf->Cell($w[$i], 8, $header[$i], 1, 0, 'C', true);
+    }
+    $pdf->Ln();
+    $pdf->SetFont('Arial', '', 7);
+    $pdf->SetTextColor(0);
+}
+
+if ($pdf->GetY() + 25 > 185) $pdf->AddPage();
+$pdf->SetFont('Arial', 'B', 11);
+$pdf->Cell(0, 8, '15. LAPORAN ANALISIS ASET & REKOMENDASI ANGGARAN (CAPEX & OPEX DSS)', 0, 1, 'L');
+cetakHeaderDSSSemua($pdf, $w_dss, $header_dss);
+
+$thnSekarang = !empty($tahun_filter) ? $tahun_filter : (int)date('Y');
+$sql_dss = "SELECT 
+    kode_aset, nama_aset, lokasi, harga, total_stok, stok_rusak, umur_ekonomis, 
+    YEAR(tanggal_masuk) as thn_masuk 
+FROM aset 
+WHERE harga > 0 
+ORDER BY lokasi ASC, nama_aset ASC";
+$res_dss = mysqli_query($koneksi, $sql_dss);
+
+$no_dss = 1;
+$found_dss = false;
+while ($a = mysqli_fetch_assoc($res_dss)) {
+    $thnMasuk = (int)$a['thn_masuk'];
+    $umurPakai = max(0, $thnSekarang - $thnMasuk);
+    $umurEko = max(1, (int)$a['umur_ekonomis']);
+    $sisaUmur = $umurEko - $umurPakai;
+    $nilaiItem = (float)$a['harga'] * (int)$a['total_stok'];
+
+    if ($sisaUmur <= 1 || (int)$a['stok_rusak'] > 0) {
+        $found_dss = true;
+        $rekom = ($sisaUmur <= 0 || (int)$a['stok_rusak'] > 0) ? 'Prioritas 1 (Usulkan Ganti CAPEX)' : 'Prioritas 2 (Servis / Siaga OPEX)';
+        $sisaStr = ($sisaUmur <= 0) ? 'Habis (' . $umurPakai . ' Th)' : $sisaUmur . ' Th Sisa';
+
+        $maxLine = max(2, ceil(strlen($a['nama_aset']) / 30), ceil(strlen($a['lokasi']) / 24));
+        $tinggi = ($maxLine * 4.5) + 3;
+
+        if ($pdf->GetY() + $tinggi > 185) {
+            $pdf->AddPage();
+            cetakHeaderDSSSemua($pdf, $w_dss, $header_dss);
+        }
+
+        $x = $pdf->GetX();
+        $y = $pdf->GetY();
+        $currX = $x;
+        for ($i = 0; $i < count($w_dss); $i++) {
+            $pdf->Rect($currX, $y, $w_dss[$i], $tinggi);
+            $currX += $w_dss[$i];
+        }
+
+        $pdf->SetXY($x, $y + 1.5);
+        $pdf->Cell($w_dss[0], 4, $no_dss++, 0, 0, 'C');
+        $pdf->SetXY($x + $w_dss[0] + 1, $y + 1.5);
+        $pdf->Cell($w_dss[1] - 2, 4, $a['kode_aset'], 0, 0, 'C');
+        $pdf->SetXY($x + $w_dss[0] + $w_dss[1] + 1, $y + 1.5);
+        $pdf->MultiCell($w_dss[2] - 2, 4, $a['nama_aset'], 0, 'L');
+        $pdf->SetXY($x + $w_dss[0] + $w_dss[1] + $w_dss[2] + 1, $y + 1.5);
+        $pdf->MultiCell($w_dss[3] - 2, 4, $a['lokasi'], 0, 'L');
+        $pdf->SetXY($x + $w_dss[0] + $w_dss[1] + $w_dss[2] + $w_dss[3] + 1, $y + 1.5);
+        $pdf->Cell($w_dss[4] - 2, 4, $thnMasuk, 0, 0, 'C');
+        $pdf->SetXY($x + $w_dss[0] + $w_dss[1] + $w_dss[2] + $w_dss[3] + $w_dss[4] + 1, $y + 1.5);
+        $pdf->Cell($w_dss[5] - 2, 4, $sisaStr, 0, 0, 'C');
+        $pdf->SetXY($x + $w_dss[0] + $w_dss[1] + $w_dss[2] + $w_dss[3] + $w_dss[4] + $w_dss[5] + 1, $y + 1.5);
+        $pdf->Cell($w_dss[6] - 2, 4, 'Rp ' . number_format($nilaiItem, 0, ',', '.'), 0, 0, 'R');
+        $pdf->SetXY($x + $w_dss[0] + $w_dss[1] + $w_dss[2] + $w_dss[3] + $w_dss[4] + $w_dss[5] + $w_dss[6] + 1, $y + 1.5);
+        $pdf->MultiCell($w_dss[7] - 2, 4, $rekom, 0, 'L');
+
+        $pdf->SetY($y + $tinggi);
+    }
+}
+if (!$found_dss) {
+    $pdf->Cell(277, 8, 'Semua aset dalam batas umur ekonomis aman dan tidak ada usulan penggantian kritis.', 1, 1, 'C');
+}
+$pdf->Ln(6);
+
+
+// =========================================================================
+// SECTION 16: LAPORAN PRIORITAS & KLASIFIKASI PEMELIHARAAN
+// =========================================================================
+$w_prio = [8, 25, 60, 45, 25, 30, 35, 49];
+$header_prio = ['No', 'Kode Aset', 'Nama Alkes / Fasilitas', 'Lokasi / Ruangan', 'Stok (T/R/P)', 'Prioritas', 'Standar Respon SLA', 'Nilai Investasi'];
+
+function cetakHeaderPrioSemua($pdf, $w, $header)
+{
+    $pdf->SetFont('Arial', 'B', 7.5);
+    $pdf->SetFillColor(72, 201, 176);
+    $pdf->SetTextColor(255);
+    for ($i = 0; $i < count($header); $i++) {
+        $pdf->Cell($w[$i], 8, $header[$i], 1, 0, 'C', true);
+    }
+    $pdf->Ln();
+    $pdf->SetFont('Arial', '', 7);
+    $pdf->SetTextColor(0);
+}
+
+if ($pdf->GetY() + 25 > 185) $pdf->AddPage();
+$pdf->SetFont('Arial', 'B', 11);
+$pdf->Cell(0, 8, '16. LAPORAN PRIORITAS & KLASIFIKASI PEMELIHARAAN ASET KRITIS', 0, 1, 'L');
+cetakHeaderPrioSemua($pdf, $w_prio, $header_prio);
+
+$sql_prio = "SELECT 
+    kode_aset, nama_aset, lokasi, total_stok, stok_tersedia, stok_rusak, stok_perawatan, 
+    tingkat_prioritas, harga 
+FROM aset 
+ORDER BY FIELD(tingkat_prioritas, 'Kritis', 'Penting', 'Rutin'), nama_aset ASC";
+$res_prio = mysqli_query($koneksi, $sql_prio);
+
+if (mysqli_num_rows($res_prio) == 0) {
+    $pdf->Cell(277, 8, 'Tidak ada data prioritas pemeliharaan.', 1, 1, 'C');
+} else {
+    $no_prio = 1;
+    while ($r = mysqli_fetch_assoc($res_prio)) {
+        $prio = $r['tingkat_prioritas'] ?? 'Penting';
+        $sla = ($prio === 'Kritis') ? '< 2 Jam (Seketika)' : (($prio === 'Rutin') ? '1 - 3 Hari Kerja' : 'Maks. 24 Jam');
+        $stokStr = $r['total_stok'] . ' / ' . ($r['stok_rusak'] ?? 0) . ' / ' . ($r['stok_perawatan'] ?? 0);
+        $totNilai = (float)$r['harga'] * (int)$r['total_stok'];
+
+        $maxLine = max(2, ceil(strlen($r['nama_aset']) / 30), ceil(strlen($r['lokasi']) / 24));
+        $tinggi = ($maxLine * 4.5) + 3;
+
+        if ($pdf->GetY() + $tinggi > 185) {
+            $pdf->AddPage();
+            cetakHeaderPrioSemua($pdf, $w_prio, $header_prio);
+        }
+
+        $x = $pdf->GetX();
+        $y = $pdf->GetY();
+        $currX = $x;
+        for ($i = 0; $i < count($w_prio); $i++) {
+            $pdf->Rect($currX, $y, $w_prio[$i], $tinggi);
+            $currX += $w_prio[$i];
+        }
+
+        $pdf->SetXY($x, $y + 1.5);
+        $pdf->Cell($w_prio[0], 4, $no_prio++, 0, 0, 'C');
+        $pdf->SetXY($x + $w_prio[0] + 1, $y + 1.5);
+        $pdf->Cell($w_prio[1] - 2, 4, $r['kode_aset'], 0, 0, 'C');
+        $pdf->SetXY($x + $w_prio[0] + $w_prio[1] + 1, $y + 1.5);
+        $pdf->MultiCell($w_prio[2] - 2, 4, $r['nama_aset'], 0, 'L');
+        $pdf->SetXY($x + $w_prio[0] + $w_prio[1] + $w_prio[2] + 1, $y + 1.5);
+        $pdf->MultiCell($w_prio[3] - 2, 4, $r['lokasi'], 0, 'L');
+        $pdf->SetXY($x + $w_prio[0] + $w_prio[1] + $w_prio[2] + $w_prio[3] + 1, $y + 1.5);
+        $pdf->Cell($w_prio[4] - 2, 4, $stokStr, 0, 0, 'C');
+        $pdf->SetXY($x + $w_prio[0] + $w_prio[1] + $w_prio[2] + $w_prio[3] + $w_prio[4] + 1, $y + 1.5);
+        $pdf->Cell($w_prio[5] - 2, 4, $prio, 0, 0, 'C');
+        $pdf->SetXY($x + $w_prio[0] + $w_prio[1] + $w_prio[2] + $w_prio[3] + $w_prio[4] + $w_prio[5] + 1, $y + 1.5);
+        $pdf->Cell($w_prio[6] - 2, 4, $sla, 0, 0, 'C');
+        $pdf->SetXY($x + $w_prio[0] + $w_prio[1] + $w_prio[2] + $w_prio[3] + $w_prio[4] + $w_prio[5] + $w_prio[6] + 1, $y + 1.5);
+        $pdf->Cell($w_prio[7] - 2, 4, 'Rp ' . number_format($totNilai, 0, ',', '.'), 0, 0, 'R');
+
+        $pdf->SetY($y + $tinggi);
+    }
+}
+$pdf->Ln(6);
+
+
+// =========================================================================
+// SECTION 17: LAPORAN MONITORING KONDISI & PEMELIHARAAN BERKALA
+// =========================================================================
+$w_mon = [8, 24, 55, 45, 28, 32, 50, 35];
+$header_mon = ['No', 'Kode Aset', 'Nama Alkes / Peralatan', 'Lokasi & PJ Ruangan', 'Kondisi Fisik', 'Jadwal Servis', 'Riwayat & Tindakan', 'Teknisi / Status'];
+
+function cetakHeaderMonSemua($pdf, $w, $header)
+{
+    $pdf->SetFont('Arial', 'B', 7.5);
+    $pdf->SetFillColor(72, 201, 176);
+    $pdf->SetTextColor(255);
+    for ($i = 0; $i < count($header); $i++) {
+        $pdf->Cell($w[$i], 8, $header[$i], 1, 0, 'C', true);
+    }
+    $pdf->Ln();
+    $pdf->SetFont('Arial', '', 7);
+    $pdf->SetTextColor(0);
+}
+
+if ($pdf->GetY() + 25 > 185) $pdf->AddPage();
+$pdf->SetFont('Arial', 'B', 11);
+$pdf->Cell(0, 8, '17. LAPORAN MONITORING KONDISI & PEMELIHARAAN BERKALA', 0, 1, 'L');
+cetakHeaderMonSemua($pdf, $w_mon, $header_mon);
+
+$sql_mon = "SELECT 
+    a.kode_aset, a.nama_aset, a.lokasi, a.pj_ruangan, a.stok_rusak, a.stok_perawatan, 
+    a.jadwal_maintenance_berikutnya,
+    (SELECT k.tindakan_perbaikan FROM kerusakan k WHERE TRIM(k.nama_aset) COLLATE utf8mb4_general_ci = TRIM(a.nama_aset) COLLATE utf8mb4_general_ci ORDER BY k.id DESC LIMIT 1) as tindakan_perbaikan,
+    (SELECT p.teknisi FROM perawatan p WHERE TRIM(p.nama_aset) COLLATE utf8mb4_general_ci = TRIM(a.nama_aset) COLLATE utf8mb4_general_ci ORDER BY p.id DESC LIMIT 1) as teknisi_rawat
+FROM aset a
+ORDER BY a.id_aset DESC";
+$res_mon = mysqli_query($koneksi, $sql_mon);
+
+if (mysqli_num_rows($res_mon) == 0) {
+    $pdf->Cell(277, 8, 'Tidak ada data monitoring pemeliharaan.', 1, 1, 'C');
+} else {
+    $no_mon = 1;
+    while ($r = mysqli_fetch_assoc($res_mon)) {
+        $lokasiPj = $r['lokasi'] . (!empty($r['pj_ruangan']) ? ' (' . $r['pj_ruangan'] . ')' : '');
+        $kondisiStr = ($r['stok_rusak'] > 0) ? 'Rusak (' . $r['stok_rusak'] . ')' : (($r['stok_perawatan'] > 0) ? 'Servis (' . $r['stok_perawatan'] . ')' : 'Siap Pakai');
+        $jdw = ($r['jadwal_maintenance_berikutnya'] && $r['jadwal_maintenance_berikutnya'] != '0000-00-00') ? date('d-m-Y', strtotime($r['jadwal_maintenance_berikutnya'])) : 'Rutin Berkala';
+        $tindakan = !empty($r['tindakan_perbaikan']) ? $r['tindakan_perbaikan'] : 'Pengecekan fungsi berkala';
+        $tek = !empty($r['teknisi_rawat']) ? $r['teknisi_rawat'] : 'Internal Sarpras';
+
+        $maxLine = max(2, ceil(strlen($r['nama_aset']) / 28), ceil(strlen($lokasiPj) / 24), ceil(strlen($tindakan) / 26));
+        $tinggi = ($maxLine * 4.5) + 3;
+
+        if ($pdf->GetY() + $tinggi > 185) {
+            $pdf->AddPage();
+            cetakHeaderMonSemua($pdf, $w_mon, $header_mon);
+        }
+
+        $x = $pdf->GetX();
+        $y = $pdf->GetY();
+        $currX = $x;
+        for ($i = 0; $i < count($w_mon); $i++) {
+            $pdf->Rect($currX, $y, $w_mon[$i], $tinggi);
+            $currX += $w_mon[$i];
+        }
+
+        $pdf->SetXY($x, $y + 1.5);
+        $pdf->Cell($w_mon[0], 4, $no_mon++, 0, 0, 'C');
+        $pdf->SetXY($x + $w_mon[0] + 1, $y + 1.5);
+        $pdf->Cell($w_mon[1] - 2, 4, $r['kode_aset'], 0, 0, 'C');
+        $pdf->SetXY($x + $w_mon[0] + $w_mon[1] + 1, $y + 1.5);
+        $pdf->MultiCell($w_mon[2] - 2, 4, $r['nama_aset'], 0, 'L');
+        $pdf->SetXY($x + $w_mon[0] + $w_mon[1] + $w_mon[2] + 1, $y + 1.5);
+        $pdf->MultiCell($w_mon[3] - 2, 4, $lokasiPj, 0, 'L');
+        $pdf->SetXY($x + $w_mon[0] + $w_mon[1] + $w_mon[2] + $w_mon[3] + 1, $y + 1.5);
+        $pdf->Cell($w_mon[4] - 2, 4, $kondisiStr, 0, 0, 'C');
+        $pdf->SetXY($x + $w_mon[0] + $w_mon[1] + $w_mon[2] + $w_mon[3] + $w_mon[4] + 1, $y + 1.5);
+        $pdf->Cell($w_mon[5] - 2, 4, $jdw, 0, 0, 'C');
+        $pdf->SetXY($x + $w_mon[0] + $w_mon[1] + $w_mon[2] + $w_mon[3] + $w_mon[4] + $w_mon[5] + 1, $y + 1.5);
+        $pdf->MultiCell($w_mon[6] - 2, 4, $tindakan, 0, 'L');
+        $pdf->SetXY($x + $w_mon[0] + $w_mon[1] + $w_mon[2] + $w_mon[3] + $w_mon[4] + $w_mon[5] + $w_mon[6] + 1, $y + 1.5);
+        $pdf->Cell($w_mon[7] - 2, 4, $tek, 0, 0, 'C');
+
+        $pdf->SetY($y + $tinggi);
+    }
+}
 $pdf->Ln(10);
-$pdf->SetFont('Arial', '', 11);
-$pdf->SetX(200);
-$pdf->Cell(70, 6, 'Banjarmasin, ' . date('d F Y'), 0, 1, 'C');
-$pdf->SetX(200);
-$pdf->Cell(70, 6, 'Kepala Rumah Sakit,', 0, 1, 'C');
-$pdf->Ln(22);
 
-$pdf->SetX(200);
-$pdf->SetFont('Arial', 'BU', 11);
-$pdf->Cell(70, 6, 'AKBP dr. Muhammad Ihsan Wahyudi', 0, 1, 'C');
-
-$pdf->SetY(-15);
-$pdf->SetFont('Arial', 'I', 8);
-$pdf->Cell(0, 10, 'Dicetak oleh: ' . $_SESSION['nama_pengguna'] . ' | SIMARIS RS Bhayangkara', 0, 0, 'C');
+// ==================== TANDA TANGAN RESMI (2 KOLOM PENANGGUNG JAWAB & KEPALA RS) ====================
+renderReportSignature($pdf, $koneksi);
 
 $pdf->Output('I', 'Rekap_Semua_Laporan_Pimpinan_' . date('Ymd_His') . '.pdf');
 exit;

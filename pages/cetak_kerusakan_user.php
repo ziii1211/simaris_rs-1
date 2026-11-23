@@ -19,6 +19,7 @@ ob_start();
 
 // load koneksi & fpdf
 require_once __DIR__ . '/../config/koneksi.php';
+require_once __DIR__ . '/../config/ttd_helper.php';
 require_once __DIR__ . '/../config/fpdf.php';
 
 // ================= QUERY DATA KERUSAKAN ================= //
@@ -39,27 +40,11 @@ $pdf = new FPDF('L', 'mm', 'A4');
 $pdf->AddPage();
 
 // LOGO
-$logoLeft  = realpath(__DIR__ . '/../assets/img/logo_dokpol.png');
-$logoRight = realpath(__DIR__ . '/../assets/img/logo_rs.jpg');
-
-if ($logoLeft && file_exists($logoLeft))  $pdf->Image($logoLeft, 10, 8, 25);
-if ($logoRight && file_exists($logoRight)) $pdf->Image($logoRight, 270, 8, 25);
-
-// HEADER
-$pdf->SetFont('Arial', 'B', 16);
-$pdf->SetXY(0, 12);
-$pdf->Cell(0, 6, 'RUMKIT BHAYANGKARA TK. III BANJARMASIN', 0, 1, 'C');
-$pdf->SetFont('Arial', '', 12);
-$pdf->Cell(0, 6, 'Jl. A. Yani Km. 3,5 Banjarmasin 70235', 0, 1, 'C');
-
-$pdf->SetY(34);
-$pdf->SetFont('Arial', 'B', 15);
-$pdf->Cell(0, 10, 'LAPORAN REKAPITULASI KERUSAKAN ASET', 0, 1, 'C');
-$pdf->Ln(4);
+renderOfficialKopSurat($pdf, 'L');
 
 // ================= TABEL HEADER =================== //
 $pdf->SetFont('Arial', 'B', 10);
-$pdf->SetFillColor(44, 122, 123); // Warna senada dengan header web (teal)
+$pdf->SetFillColor(72, 201, 176); // Warna senada dengan header web (teal)
 $pdf->SetTextColor(255);
 
 // Lebar total A4 Landscape kurang lebih 277mm
@@ -94,20 +79,8 @@ while ($r = mysqli_fetch_assoc($res)) {
     $pdf->Cell($widths[6], 8, $keterangan, 1, 1);
 }
 
-// ================= TANDA TANGAN ================= //
-$pdf->Ln(8);
-$pdf->SetFont('Arial', '', 11);
-$pdf->Cell(0, 6, 'Banjarmasin, ' . date('d F Y'), 0, 1, 'R');
-$pdf->Cell(0, 6, 'Mengetahui,', 0, 1, 'R');
-$pdf->Ln(18);
-
-$pdf->SetFont('Arial', 'B', 11);
-$pdf->Cell(0, 6, 'Kepala / Administrator', 0, 1, 'R');
-
-// FOOTER
-$pdf->Ln(5);
-$pdf->SetFont('Arial', 'I', 9);
-$pdf->Cell(0, 6, 'Dicetak pada: ' . date('d-m-Y H:i:s') . ' oleh ' . ($_SESSION['nama_pengguna'] ?? '-'), 0, 1, 'R');
+// ==================== TANDA TANGAN (2 KOLOM) ==================== //
+renderReportSignature($pdf, $koneksi);
 
 // ================= OUTPUT ========================== //
 ob_end_clean();

@@ -27,6 +27,7 @@ $search = isset($_GET['search']) ? mysqli_real_escape_string($koneksi, $_GET['se
 $kategori_filter = isset($_GET['kategori']) ? $_GET['kategori'] : 'semua';
 $tahun_filter = isset($_GET['tahun']) ? (int)$_GET['tahun'] : "";
 $status_filter = isset($_GET['status']) ? mysqli_real_escape_string($koneksi, $_GET['status']) : "";
+$prioritas_filter = isset($_GET['prioritas']) ? mysqli_real_escape_string($koneksi, $_GET['prioritas']) : "";
 
 $whereConditions = [];
 
@@ -64,6 +65,11 @@ if ($status_filter != '') {
     $whereConditions[] = "p.status = '$status_filter'";
 }
 
+// FILTER TINGKAT PRIORITAS
+if ($prioritas_filter != '') {
+    $whereConditions[] = "a.tingkat_prioritas = '$prioritas_filter'";
+}
+
 $whereClause = "";
 if (count($whereConditions) > 0) {
     $whereClause = "WHERE " . implode(" AND ", $whereConditions);
@@ -74,8 +80,9 @@ $url_params = "";
 if ($search != '') $url_params .= '&search=' . urlencode($search);
 if ($tahun_filter != '') $url_params .= '&tahun=' . urlencode($tahun_filter);
 if ($status_filter != '') $url_params .= '&status=' . urlencode($status_filter);
+if ($prioritas_filter != '') $url_params .= '&prioritas=' . urlencode($prioritas_filter);
 
-// ================= QUERY DATA (JOIN ASET FIX COLLATION) ================= //
+// ================= QUERY DATA (JOIN ASET FIX COLLATION & PRIORITAS SORT) ================= //
 $count_query = mysqli_query($koneksi, "
     SELECT COUNT(*) as total 
     FROM perawatan p
@@ -86,11 +93,11 @@ $total_data = mysqli_fetch_assoc($count_query)['total'];
 $total_page = ceil($total_data / $limit);
 
 $query = mysqli_query($koneksi, "
-    SELECT p.*, a.kategori_aset, a.lokasi 
+    SELECT p.*, a.kategori_aset, a.lokasi, COALESCE(a.tingkat_prioritas, 'Penting') as tingkat_prioritas 
     FROM perawatan p
     LEFT JOIN aset a ON p.nama_aset COLLATE utf8mb4_general_ci = a.nama_aset COLLATE utf8mb4_general_ci
     $whereClause
-    ORDER BY p.id DESC
+    ORDER BY FIELD(COALESCE(a.tingkat_prioritas, 'Penting'), 'Kritis', 'Penting', 'Rutin') ASC, p.tanggal DESC, p.id DESC
     LIMIT $limit OFFSET $offset
 ");
 ?>
@@ -273,6 +280,13 @@ $query = mysqli_query($koneksi, "
                                     <option value="Selesai" <?= ($status_filter == 'Selesai') ? 'selected' : '' ?>>Selesai</option>
                                 </select>
 
+                                <select name="prioritas" class="form-select text-dark filter-select" style="min-width: 155px;">
+                                    <option value="">Semua Prioritas</option>
+                                    <option value="Kritis" <?= ($prioritas_filter == 'Kritis') ? 'selected' : '' ?>>🔴 Kritis (Life-Support)</option>
+                                    <option value="Penting" <?= ($prioritas_filter == 'Penting') ? 'selected' : '' ?>>🟡 Penting (Diagnostik)</option>
+                                    <option value="Rutin" <?= ($prioritas_filter == 'Rutin') ? 'selected' : '' ?>>⚪ Rutin (Umum)</option>
+                                </select>
+
                                 <select name="tahun" class="form-select text-dark filter-select" style="min-width: 130px;">
                                     <option value="">Semua Tahun</option>
                                     <?php
@@ -299,6 +313,10 @@ $query = mysqli_query($koneksi, "
 
                             <a href="perawatan_tambah.php" class="btn btn-light btn-sm text-dark d-flex align-items-center" style="border-radius: 6px; height: 31px;">
                                 <i class="bi bi-plus-lg me-1"></i> Tambah
+                            </a>
+
+                            <a href="prioritas_pemeliharaan.php" class="btn btn-warning btn-sm text-dark fw-bold d-flex align-items-center" style="border-radius: 6px; height: 31px;">
+                                <i class="bi bi-shield-fill-check me-1"></i> Dashboard Kritis
                             </a>
 
                             <a href="perawatan_cetak.php?kategori=<?= urlencode($kategori_filter) ?><?= $url_params ?>"
@@ -337,6 +355,7 @@ $query = mysqli_query($koneksi, "
                             <thead>
                                 <tr>
                                     <th>#</th>
+                                    <th style="min-width: 120px;">Prioritas</th>
                                     <th>Nama Aset</th>
                                     <th>Lokasi Ruangan</th>
                                     <th>Kategori</th>
@@ -345,6 +364,7 @@ $query = mysqli_query($koneksi, "
                                     <th>Tgl Perawatan</th>
                                     <th>Jadwal Kalibrasi Berikutnya</th>
                                     <th>Status</th>
+                                    <th>Biaya Servis / Kalibrasi</th>
                                     <th>Aksi</th>
                                 </tr>
                             </thead>
@@ -353,7 +373,8 @@ $query = mysqli_query($koneksi, "
 
                                 <?php if (mysqli_num_rows($query) == 0): ?>
                                     <tr>
-                                        <td colspan="10" class="py-5 text-center text-muted">
+                                        <td colspan="12" class="py-5 text-center text-muted">
+
                                             <i class="bi bi-inboxes d-block mb-2" style="font-size: 2rem;"></i>
                                             Tidak ada jadwal perawatan / kalibrasi di kategori ini.
                                         </td>
@@ -363,9 +384,23 @@ $query = mysqli_query($koneksi, "
                                     <?php
                                     $no = $offset + 1;
                                     while ($p = mysqli_fetch_assoc($query)):
+                                        $prio = $p['tingkat_prioritas'] ?? 'Penting';
+                                        $isKritis = ($prio === 'Kritis');
                                     ?>
-                                        <tr>
+                                        <tr style="<?= $isKritis ? 'background-color: #fff5f5;' : '' ?>">
                                             <td><?= $no++ ?></td>
+                                            <td>
+                                                <?php if ($prio === 'Kritis'): ?>
+                                                    <span class="badge bg-danger shadow-sm"><i class="bi bi-exclamation-triangle-fill"></i> Kritis</span>
+                                                    <div class="text-danger fw-bold mt-1" style="font-size: 10px;">SLA < 2 Jam</div>
+                                                <?php elseif ($prio === 'Penting'): ?>
+                                                    <span class="badge bg-warning text-dark"><i class="bi bi-shield"></i> Penting</span>
+                                                    <div class="text-muted mt-1" style="font-size: 10px;">SLA 24 Jam</div>
+                                                <?php else: ?>
+                                                    <span class="badge bg-secondary"><i class="bi bi-check-circle"></i> Rutin</span>
+                                                    <div class="text-muted mt-1" style="font-size: 10px;">SLA 1-3 Hari</div>
+                                                <?php endif; ?>
+                                            </td>
                                             <td class="text-start fw-bold"><?= htmlspecialchars($p['nama_aset']) ?></td>
 
                                             <td class="text-start">
@@ -419,7 +454,12 @@ $query = mysqli_query($koneksi, "
                                                 <?php endif; ?>
                                             </td>
 
+                                            <td class="text-end fw-bold text-dark">
+                                                <?= !empty($p['biaya_pemeliharaan']) && $p['biaya_pemeliharaan'] > 0 ? 'Rp ' . number_format($p['biaya_pemeliharaan'], 0, ',', '.') : '<span class="text-muted">-</span>' ?>
+                                            </td>
+
                                             <td>
+
                                                 <div class="btn-action">
                                                     <a href="perawatan_edit.php?id=<?= $p['id'] ?>" class="btn btn-warning btn-sm text-white">
                                                         <i class="bi bi-pencil-square"></i>

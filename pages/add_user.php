@@ -133,6 +133,7 @@ if (isset($_POST['simpan'])) {
                                     <option value="admin">Admin</option>
                                     <option value="pegawai">Pegawai</option>
                                     <option value="teknisi">Teknisi</option>
+                                    <option value="keuangan">Keuangan</option>
                                 </select>
                             </div>
                             <div class="col-md-6 mb-3">

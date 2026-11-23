@@ -5,8 +5,10 @@ if (!isset($_SESSION['id_pengguna'])) {
     exit;
 }
 
+ob_start(); // Ditambahkan biar aman dari output whitespace seperti di laporan audit
 require(__DIR__ . '/../config/fpdf.php');
 include(__DIR__ . '/../config/koneksi.php');
+require_once(__DIR__ . '/../config/ttd_helper.php');
 
 // ==================== FILTER DATA ==================== //
 $search  = mysqli_real_escape_string($koneksi, $_GET['search'] ?? '');
@@ -26,10 +28,13 @@ $sql = "SELECT kerusakan.*, aset.kategori_aset, aset.lokasi
 $res = mysqli_query($koneksi, $sql);
 
 // ==================== PDF SETUP ==================== //
+// Inisialisasi FPDF (Sebelumnya ini terlewat makanya logo tidak jalan)
 $pdf = new FPDF('L', 'mm', 'A4');
 $pdf->AddPage();
 $pdf->SetMargins(10, 10, 10);
 $pdf->SetAutoPageBreak(false);
+
+renderOfficialKopSurat($pdf, 'L');
 
 $pdf->SetFont('Arial', 'B', 14);
 $pdf->Cell(0, 10, 'LAPORAN DATA PERBAIKAN ASET', 0, 1, 'C');
@@ -56,6 +61,7 @@ function cetakHeaderPerbaikan($pdf, $w, $header)
 cetakHeaderPerbaikan($pdf, $w, $header);
 
 // ==================== ISI DATA ==================== //
+// ==================== ISI DATA ==================== //
 $no = 1;
 while ($r = mysqli_fetch_assoc($res)) {
 
@@ -68,10 +74,20 @@ while ($r = mysqli_fetch_assoc($res)) {
     $status     = $r['status'] ?? '-';
     $keterangan = $r['keterangan'] ?? '-';
 
-    // Membatasi teks agar lebih rapi di PDF
+    // Membatasi teks nama aset agar tidak terlalu panjang (opsional)
     if (strlen($nama_aset) > 20) $nama_aset = substr($nama_aset, 0, 18) . '...';
 
-    $maxLine = max(1, ceil(strlen($nama_aset) / 20), ceil(strlen($keterangan) / 60));
+    // PERBAIKAN: Menghitung maksimal baris dengan mempertimbangkan semua kolom yang berpotensi multiline
+    $maxLine = max(
+        1,
+        ceil(strlen($nama_aset) / 20),
+        ceil(strlen($lokasi) / 15),      // Kolom lokasi (lebar 25)
+        ceil(strlen($pelapor) / 15),     // Kolom pelapor (lebar 25)
+        ceil(strlen($teknisi) / 15),     // Kolom teknisi (lebar 25)
+        ceil(strlen($keterangan) / 60)   // Kolom keterangan (lebar 92)
+    );
+
+    // Menghitung tinggi baris dinamis
     $tinggi = ($maxLine * 5) + 4;
 
     if ($pdf->GetY() + $tinggi > 185) {
@@ -115,24 +131,17 @@ while ($r = mysqli_fetch_assoc($res)) {
     $pdf->SetXY($x + $w[0] + $w[1] + $w[2] + $w[3] + $w[4] + $w[5] + $w[6] + $w[7] + 1, $y + 2);
     $pdf->MultiCell($w[8] - 2, 5, $keterangan, 0, 'L');
 
+    // Geser Y ke bawah sesuai tinggi baris yang baru
     $pdf->SetY($y + $tinggi);
 }
-
 // ==================== AREA TANDA TANGAN ==================== //
-if ($pdf->GetY() > 155) {
+// Mengubah batas toleransi dari 155 ke 140 agar area tanda tangan tidak kepotong
+if ($pdf->GetY() > 140) {
     $pdf->AddPage();
 }
 
-$pdf->Ln(10);
-$pdf->SetFont('Arial', '', 11);
-$pdf->Cell(0, 6, 'Banjarmasin, ' . date('d F Y'), 0, 1, 'R');
-$pdf->Cell(0, 6, 'Mengetahui,', 0, 1, 'R');
-$pdf->Ln(15);
-$pdf->SetFont('Arial', 'B', 11);
-$pdf->Cell(0, 6, 'Administrator', 0, 1, 'R');
-$pdf->Ln(4);
-$pdf->SetFont('Arial', 'I', 9);
-$pdf->Cell(0, 6, 'Dicetak pada: ' . date('d-m-Y H:i:s') . ' oleh ' . $_SESSION['nama_pengguna'], 0, 1, 'R');
+// ==================== TANDA TANGAN (2 KOLOM) ==================== //
+renderReportSignature($pdf, $koneksi);
 
 ob_end_clean();
 $pdf->Output('I', 'Laporan_Perbaikan_' . date('Ymd_His') . '.pdf');

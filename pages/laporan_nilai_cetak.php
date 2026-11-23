@@ -1,7 +1,7 @@
 <?php
 session_start();
 
-if (!isset($_SESSION['id_pengguna']) || $_SESSION['role'] !== 'admin') {
+if (!isset($_SESSION['id_pengguna']) || ($_SESSION['role'] !== 'admin' && ($_SESSION['level'] ?? '') !== 'keuangan')) {
     header("Location: ../login.php");
     exit;
 }
@@ -9,6 +9,7 @@ if (!isset($_SESSION['id_pengguna']) || $_SESSION['role'] !== 'admin') {
 ob_start();
 require(__DIR__ . '/../config/fpdf.php');
 include(__DIR__ . '/../config/koneksi.php');
+require_once(__DIR__ . '/../config/ttd_helper.php');
 
 $search         = isset($_GET['search']) ? mysqli_real_escape_string($koneksi, $_GET['search']) : '';
 $kategoriFilter = isset($_GET['kategori']) ? mysqli_real_escape_string($koneksi, $_GET['kategori']) : '';
@@ -32,18 +33,7 @@ $pdf->SetMargins(10, 10, 10);
 $pdf->SetAutoPageBreak(false);
 
 $y = 8;
-$logoLeft  = realpath(__DIR__ . '/../assets/img/logo_dokpol.png');
-$logoRight = realpath(__DIR__ . '/../assets/img/logo_rs.jpg');
-
-if (file_exists($logoLeft)) $pdf->Image($logoLeft, 15, $y, 22);
-if (file_exists($logoRight)) $pdf->Image($logoRight, 260, $y, 22);
-
-$pdf->SetFont('Arial', 'B', 16);
-$pdf->SetXY(0, 12);
-$pdf->Cell(0, 6, 'RUMKIT BHAYANGKARA TK. III BANJARMASIN', 0, 1, 'C');
-$pdf->SetFont('Arial', '', 11);
-$pdf->Cell(0, 6, 'Jl. A. Yani Km. 3,5 Banjarmasin 70235', 0, 1, 'C');
-$pdf->Ln(8);
+renderOfficialKopSurat($pdf, 'L');
 
 $pdf->SetFont('Arial', 'B', 14);
 $pdf->Cell(0, 10, 'LAPORAN REKAPITULASI NILAI DEPRESIASI ASET', 0, 1, 'C');
@@ -149,21 +139,12 @@ $pdf->SetTextColor(25, 135, 84);
 $pdf->Cell($w[8], 10, 'Rp ' . number_format($total_nilai_saat_ini, 0, ',', '.'), 1, 1, 'R', true);
 $pdf->SetTextColor(0);
 
-if ($pdf->GetY() > 155) {
+if ($pdf->GetY() > 140) {
     $pdf->AddPage();
 }
 
-$pdf->Ln(10);
-$pdf->SetFont('Arial', '', 11);
-$pdf->Cell(0, 6, 'Banjarmasin, ' . date('d F Y'), 0, 1, 'R');
-$pdf->Cell(0, 6, 'Mengetahui,', 0, 1, 'R');
-$pdf->Ln(15);
-
-$pdf->SetFont('Arial', 'B', 11);
-$pdf->Cell(0, 6, 'Administrator', 0, 1, 'R');
-$pdf->Ln(4);
-$pdf->SetFont('Arial', 'I', 9);
-$pdf->Cell(0, 6, 'Dicetak pada: ' . date('d-m-Y H:i:s') . ' oleh ' . $_SESSION['nama_pengguna'], 0, 1, 'R');
+// ==================== TANDA TANGAN (2 KOLOM) ==================== //
+renderReportSignature($pdf, $koneksi);
 
 ob_end_clean();
 $pdf->Output('I', 'Laporan_Nilai_Depresiasi_Aset.pdf');

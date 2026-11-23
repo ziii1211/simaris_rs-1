@@ -7,6 +7,7 @@ if (!isset($_SESSION['id_pengguna'])) {
 ob_start();
 require(__DIR__ . '/../config/fpdf.php');
 include(__DIR__ . '/../config/koneksi.php');
+require_once(__DIR__ . '/../config/ttd_helper.php');
 
 // Tangkap parameter filter dari laporan pelacakan
 $search = isset($_GET['search']) ? mysqli_real_escape_string($koneksi, $_GET['search']) : '';
@@ -42,19 +43,7 @@ $pdf->SetAutoPageBreak(true, 10);
 
 /* ================= KOP SURAT ================= */
 $y = 8;
-$logoLeft  = realpath(__DIR__ . '/../assets/img/logo_dokpol.png');
-$logoRight = realpath(__DIR__ . '/../assets/img/logo_rs.jpg');
-
-if (file_exists($logoLeft)) $pdf->Image($logoLeft, 15, $y, 25);
-if (file_exists($logoRight)) $pdf->Image($logoRight, 260, $y, 25);
-
-$pdf->SetFont('Arial', 'B', 16);
-$pdf->SetXY(0, $y + 5);
-$pdf->Cell(0, 10, 'RUMKIT BHAYANGKARA TK. III BANJARMASIN', 0, 1, 'C');
-
-$pdf->SetFont('Arial', '', 12);
-$pdf->Cell(0, 6, 'Jl. A. Yani Km. 3,5 Banjarmasin 70235', 0, 1, 'C');
-$pdf->Ln(15);
+renderOfficialKopSurat($pdf, 'L');
 
 /* ================= JUDUL LAPORAN ================= */
 $pdf->SetFont('Arial', 'B', 15);
@@ -107,9 +96,31 @@ if (mysqli_num_rows($res) == 0) {
 }
 
 /* ================= FOOTER TANDA TANGAN ================= */
+// Tambahan pengecekan halaman agar tidak kepotong
+if ($pdf->GetY() > 140) {
+    $pdf->AddPage();
+}
+
+// Array bulan bahasa Indonesia
+$bulan_indo = [
+    1 => 'Januari',
+    'Februari',
+    'Maret',
+    'April',
+    'Mei',
+    'Juni',
+    'Juli',
+    'Agustus',
+    'September',
+    'Oktober',
+    'November',
+    'Desember'
+];
+$tgl_sekarang = date('d') . ' ' . $bulan_indo[(int)date('m')] . ' ' . date('Y');
+
 $pdf->Ln(10);
 $pdf->SetFont('Arial', '', 10);
-$pdf->Cell(0, 5, 'Banjarmasin, ' . date('d F Y'), 0, 1, 'R');
+$pdf->Cell(0, 5, 'Banjarmasin, ' . $tgl_sekarang, 0, 1, 'R');
 $pdf->Cell(0, 5, 'Mengetahui,', 0, 1, 'R');
 $pdf->Cell(0, 5, 'Administrator', 0, 1, 'R');
 
@@ -121,6 +132,9 @@ $pdf->Cell(0, 5, $_SESSION['nama_pengguna'], 0, 1, 'R');
 $pdf->Ln(5);
 $pdf->SetFont('Arial', 'I', 9);
 $pdf->Cell(0, 5, 'Dicetak pada: ' . date('d-m-Y H:i:s') . ' oleh ' . $_SESSION['nama_pengguna'], 0, 1, 'R');
+
+// ==================== TANDA TANGAN (2 KOLOM) ==================== //
+renderReportSignature($pdf, $koneksi);
 
 $pdf->Output('I', 'Laporan_Pelacakan_Aset.pdf');
 exit;

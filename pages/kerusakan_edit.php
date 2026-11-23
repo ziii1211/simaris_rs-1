@@ -22,11 +22,16 @@ if (isset($_POST['update'])) {
     $tanggal     = mysqli_real_escape_string($koneksi, $_POST['tanggal']);
     $keterangan  = mysqli_real_escape_string($koneksi, $_POST['keterangan']);
     $pelapor     = mysqli_real_escape_string($koneksi, $_POST['pelapor']);
+    $tingkat_urgensi    = mysqli_real_escape_string($koneksi, $_POST['tingkat_urgensi'] ?? 'Normal');
+    $tindakan_perbaikan = mysqli_real_escape_string($koneksi, $_POST['tindakan_perbaikan'] ?? '');
+    $sparepart_diganti  = mysqli_real_escape_string($koneksi, $_POST['sparepart_diganti'] ?? '');
+    $biaya_perbaikan    = floatval($_POST['biaya_perbaikan'] ?? 0);
 
-    // [MODIFIKASI] Teknisi dikunci ke Budi Setiawan
+    // Teknisi dikunci ke Budi Setiawan
     $teknisi     = 'Budi Setiawan';
 
     $status_lama = $k['status']; // Tangkap status sebelum diubah
+    $tgl_selesai_sql = ($status_baru == 'Selesai Diperbaiki') ? ", tanggal_selesai = CURDATE()" : "";
 
     // QUERY UPDATE DATA ASLI 
     $update_query = mysqli_query($koneksi, "UPDATE kerusakan SET 
@@ -34,8 +39,13 @@ if (isset($_POST['update'])) {
                     status='$status_baru', 
                     tanggal='$tanggal', 
                     keterangan='$keterangan',
+                    tingkat_urgensi='$tingkat_urgensi',
+                    tindakan_perbaikan='$tindakan_perbaikan',
+                    sparepart_diganti='$sparepart_diganti',
+                    biaya_perbaikan='$biaya_perbaikan',
                     pelapor='$pelapor',
-                    teknisi='$teknisi' 
+                    teknisi='$teknisi'
+                    $tgl_selesai_sql 
                     WHERE id=$id");
 
     // SINKRONISASI STOK OTOMATIS BERDASARKAN PERUBAHAN STATUS
@@ -62,7 +72,7 @@ if (isset($_POST['update'])) {
 
         echo "<script>alert('Data laporan perbaikan berhasil diperbarui!');window.location='kerusakan.php';</script>";
     } else {
-        echo "<script>alert('Gagal memperbarui data kerusakan!');</script>";
+        echo "<script>alert('Gagal memperbarui data kerusakan: " . mysqli_error($koneksi) . "');</script>";
     }
 }
 ?>
@@ -203,50 +213,82 @@ if (isset($_POST['update'])) {
                             </div>
 
                             <div class="row">
-                                <div class="col-md-4 mb-4">
+                                <!-- Kolom 1: Status Perbaikan -->
+                                <div class="col-md-4 mb-3">
                                     <label class="form-label">Status Perbaikan</label>
-                                    <select name="status" class="form-select border-danger" required>
+                                    <select name="status" class="form-select border-danger fw-bold" required>
                                         <option value="Rusak" <?= $k['status'] == 'Rusak' ? 'selected' : '' ?>>Rusak (Mati Total)</option>
                                         <option value="Perlu Perawatan" <?= $k['status'] == 'Perlu Perawatan' ? 'selected' : '' ?>>Perlu Perawatan</option>
                                         <option value="Dalam Perbaikan" <?= $k['status'] == 'Dalam Perbaikan' ? 'selected' : '' ?>>Dalam Perbaikan / Diproses</option>
                                         <option value="Selesai Diperbaiki" <?= $k['status'] == 'Selesai Diperbaiki' ? 'selected' : '' ?>>Selesai Diperbaiki</option>
                                     </select>
                                 </div>
-                                <div class="col-md-4 mb-4">
-                                    <label class="form-label">Ditangani Teknisi</label>
-                                    <input type="text" name="teknisi" class="form-control bg-light text-primary fw-bold" value="Budi Setiawan" readonly required>
+
+                                <!-- Kolom 2: Tingkat Urgensi -->
+                                <div class="col-md-4 mb-3">
+                                    <label for="tingkat_urgensi" class="form-label">Tingkat Urgensi</label>
+                                    <select name="tingkat_urgensi" id="tingkat_urgensi" class="form-select">
+                                        <option value="Rendah" <?= ($k['tingkat_urgensi'] ?? '') == 'Rendah' ? 'selected' : '' ?>>Rendah</option>
+                                        <option value="Normal" <?= ($k['tingkat_urgensi'] ?? '') == 'Normal' || empty($k['tingkat_urgensi']) ? 'selected' : '' ?>>Normal</option>
+                                        <option value="Tinggi" <?= ($k['tingkat_urgensi'] ?? '') == 'Tinggi' ? 'selected' : '' ?>>Tinggi</option>
+                                        <option value="Kritis" <?= ($k['tingkat_urgensi'] ?? '') == 'Kritis' ? 'selected' : '' ?>>Kritis</option>
+                                    </select>
                                 </div>
-                                <div class="col-md-4 mb-4">
+
+                                <!-- Kolom 3: Tanggal Pembaruan -->
+                                <div class="col-md-4 mb-3">
                                     <label class="form-label">Tanggal Pembaruan</label>
                                     <input type="date" name="tanggal" class="form-control" value="<?= htmlspecialchars($k['tanggal']) ?>" required>
                                 </div>
                             </div>
 
+                            <div class="row">
+                                <div class="col-md-6 mb-3">
+                                    <label class="form-label">Ditangani Teknisi</label>
+                                    <input type="text" name="teknisi" class="form-control bg-light text-primary fw-bold" value="<?= htmlspecialchars($k['teknisi'] ?: 'Budi Setiawan') ?>" readonly required>
+                                </div>
+                                <div class="col-md-6 mb-3">
+                                    <label class="form-label">Biaya Perbaikan / Sparepart (Rp)</label>
+                                    <input type="number" name="biaya_perbaikan" class="form-control" value="<?= htmlspecialchars((int)($k['biaya_perbaikan'] ?? 0)) ?>" min="0" step="5000">
+                                </div>
+                            </div>
+
+                            <div class="mb-3">
+                                <label class="form-label">Keluhan / Deskripsi Kerusakan Awal</label>
+                                <textarea name="keterangan" class="form-control" rows="2" required><?= htmlspecialchars($k['keterangan']) ?></textarea>
+                            </div>
+
+                            <div class="mb-3">
+                                <label class="form-label fw-bold text-success"><i class="bi bi-wrench-adjustable-circle me-1"></i> Tindakan Perbaikan Teknisi / Solusi Penanganan</label>
+                                <textarea name="tindakan_perbaikan" class="form-control border-success" rows="3" placeholder="Deskripsikan tindakan teknis, misalnya: penggantian sensor, pembersihan board, kalibrasi ulang tegangan..."><?= htmlspecialchars($k['tindakan_perbaikan'] ?? '') ?></textarea>
+                            </div>
+
                             <div class="mb-4">
-                                <label class="form-label">Catatan Hasil Penanganan Teknis</label>
-                                <textarea name="keterangan" class="form-control" rows="4" required><?= htmlspecialchars($k['keterangan']) ?></textarea>
+                                <label class="form-label fw-bold text-primary"><i class="bi bi-cpu me-1"></i> Suku Cadang (Spare Part) Diganti</label>
+                                <input type="text" name="sparepart_diganti" class="form-control" placeholder="Contoh: Baterai Lithium 12V, Mainboard Power, Sensor Oksigen (atau kosongkan / '-' jika tidak ada)" value="<?= htmlspecialchars($k['sparepart_diganti'] ?? '') ?>">
+                                <div class="form-text text-muted">Cantumkan rincian suku cadang medis/non-medis yang diganti saat perbaikan.</div>
                             </div>
 
-                            <hr>
+                    <hr>
 
-                            <div class="row g-2 mt-2">
-                                <div class="col-sm-8">
-                                    <button type="submit" name="update" class="btn btn-success w-100 py-2 fw-bold" style="border-radius: 8px;">
-                                        <i class="bi bi-save-fill"></i> Simpan Hasil Perbaikan
-                                    </button>
-                                </div>
-                                <div class="col-sm-4">
-                                    <a href="kerusakan.php" class="btn btn-secondary w-100 py-2" style="border-radius: 8px;">
-                                        Batal Kembali
-                                    </a>
-                                </div>
-                            </div>
-
-                        </form>
+                    <div class="row g-2 mt-2">
+                        <div class="col-sm-8">
+                            <button type="submit" name="update" class="btn btn-success w-100 py-2 fw-bold" style="border-radius: 8px;">
+                                <i class="bi bi-save-fill"></i> Simpan Hasil Perbaikan
+                            </button>
+                        </div>
+                        <div class="col-sm-4">
+                            <a href="kerusakan.php" class="btn btn-secondary w-100 py-2" style="border-radius: 8px;">
+                                Batal Kembali
+                            </a>
+                        </div>
                     </div>
+
+                    </form>
                 </div>
             </div>
         </div>
+    </div>
     </div>
 </body>
 

@@ -7,6 +7,7 @@ if (!isset($_SESSION['id_pengguna'])) {
 
 require(__DIR__ . '/../config/fpdf.php');
 include(__DIR__ . '/../config/koneksi.php');
+require_once(__DIR__ . '/../config/ttd_helper.php');
 
 // ==================== FILTER DATA ==================== //
 // Sesuaikan parameter GET dengan filter di laporan_aset.php
@@ -37,30 +38,18 @@ $pdf->AddPage();
 $pdf->SetMargins(10, 10, 10);
 $pdf->SetAutoPageBreak(false);
 
-$y = 8;
-$logoLeft  = realpath(__DIR__ . '/../assets/img/logo_dokpol.png');
-$logoRight = realpath(__DIR__ . '/../assets/img/logo_rs.jpg');
-if ($logoLeft && file_exists($logoLeft))  $pdf->Image($logoLeft, 15, $y, 22);
-if ($logoRight && file_exists($logoRight)) $pdf->Image($logoRight, 260, $y, 22);
+renderOfficialKopSurat($pdf, 'L');
 
-$pdf->SetFont('Arial', 'B', 16);
-$pdf->SetXY(0, $y + 3);
-$pdf->Cell(0, 10, 'RUMKIT BHAYANGKARA TK. III BANJARMASIN', 0, 1, 'C');
-$pdf->SetFont('Arial', '', 11);
-$pdf->Cell(0, 6, 'Jl. A. Yani Km. 3,5 Banjarmasin 70235', 0, 1, 'C');
-$pdf->Ln(10);
-
-$pdf->SetFont('Arial', 'B', 14);
-$pdf->Cell(0, 8, 'LAPORAN REKAPITULASI INVENTARIS ASET', 0, 1, 'C');
+$pdf->SetFont('Arial', 'B', 13);
+$pdf->Cell(0, 7, 'LAPORAN REKAPITULASI INVENTARIS ASET', 0, 1, 'C');
 
 if ($dari != '' && $sampai != '') {
-    $pdf->SetFont('Arial', 'I', 10);
+    $pdf->SetFont('Arial', 'I', 9.5);
     $pdf->Cell(0, 5, 'Periode Registrasi: ' . date('d/m/Y', strtotime($dari)) . ' s/d ' . date('d/m/Y', strtotime($sampai)), 0, 1, 'C');
 }
 $pdf->Ln(4);
 
 // ==================== DAFTAR 13 KOLOM (Total Lebar A4 Landscape = 277mm) ==================== //
-// Penyesuaian lebar kolom (W) agar total = 277mm
 $w = [8, 40, 15, 18, 18, 20, 16, 28, 18, 25, 14, 20, 37];
 $header = ['No', 'Nama Aset', 'Kategori', 'Jenis', 'Tipe', 'Lokasi Ruangan', 'Total Stok', 'Rincian Ketersediaan', 'Asal Usul', 'Harga Perolehan', 'Umur Eko.', 'Tanggal Masuk', 'Dokumen'];
 
@@ -180,21 +169,8 @@ while ($r = mysqli_fetch_assoc($res)) {
     $pdf->SetY($y + $tinggi);
 }
 
-// ==================== TANDA TANGAN ==================== //
-if ($pdf->GetY() > 155) {
-    $pdf->AddPage();
-}
-
-$pdf->Ln(10);
-$pdf->SetFont('Arial', '', 10);
-$pdf->Cell(0, 6, 'Banjarmasin, ' . date('d F Y'), 0, 1, 'R');
-$pdf->Cell(0, 6, 'Mengetahui,', 0, 1, 'R');
-$pdf->Ln(15);
-$pdf->SetFont('Arial', 'B', 10);
-$pdf->Cell(0, 6, 'Administrator Aset', 0, 1, 'R');
-$pdf->Ln(4);
-$pdf->SetFont('Arial', 'I', 8);
-$pdf->Cell(0, 6, 'Dicetak pada: ' . date('d-m-Y H:i:s') . ' oleh ' . $_SESSION['nama_pengguna'], 0, 1, 'R');
+// ==================== TANDA TANGAN (2 KOLOM) ==================== //
+renderReportSignature($pdf, $koneksi);
 
 ob_end_clean();
 $pdf->Output('I', 'Laporan_Master_Aset_' . date('Ymd_His') . '.pdf');

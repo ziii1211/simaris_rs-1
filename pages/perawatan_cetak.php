@@ -7,6 +7,7 @@ if (!isset($_SESSION['id_pengguna'])) {
 
 require('../config/fpdf.php');
 include(__DIR__ . '/../config/koneksi.php');
+require_once(__DIR__ . '/../config/ttd_helper.php');
 
 // Menangkap Pencarian (Abaikan Tab agar selalu cetak Semua)
 $search = isset($_GET['search']) ? mysqli_real_escape_string($koneksi, $_GET['search']) : '';
@@ -32,20 +33,7 @@ $pdf->AddPage();
 
 /* ================= KOP SURAT ================= */
 $y = 8;
-$logoLeft  = realpath(__DIR__ . '/../assets/img/logo_dokpol.png');
-$logoRight = realpath(__DIR__ . '/../assets/img/logo_rs.jpg');
-
-if (file_exists($logoLeft)) $pdf->Image($logoLeft, 15, $y, 25);
-if (file_exists($logoRight)) $pdf->Image($logoRight, 260, $y, 25);
-
-$pdf->SetFont('Arial', 'B', 16);
-$pdf->SetXY(0, $y + 5);
-$pdf->Cell(0, 10, 'RUMKIT BHAYANGKARA TK. III BANJARMASIN', 0, 1, 'C');
-
-$pdf->SetFont('Arial', '', 12);
-$pdf->Cell(0, 6, 'Jl. A. Yani Km. 3,5 Banjarmasin 70235', 0, 1, 'C');
-
-$pdf->Ln(15);
+renderOfficialKopSurat($pdf, 'L');
 
 /* ================= JUDUL ================= */
 $pdf->SetFont('Arial', 'B', 14);
@@ -111,6 +99,9 @@ $pdf->Cell(0, 5, $_SESSION['nama_pengguna'], 0, 1, 'R');
 $pdf->Ln(5);
 $pdf->SetFont('Arial', 'I', 9);
 $pdf->Cell(0, 5, 'Dicetak pada: ' . date('d-m-Y H:i:s') . ' oleh ' . $_SESSION['nama_pengguna'], 0, 1, 'R');
+
+// ==================== TANDA TANGAN (2 KOLOM) ==================== //
+renderReportSignature($pdf, $koneksi);
 
 $pdf->Output();
 exit;

@@ -50,8 +50,27 @@ if (isset($_POST['update'])) {
         $dokumen_query = ", dokumen = '$file_name'";
     }
 
+    $kode_aset = mysqli_real_escape_string($koneksi, trim($_POST['kode_aset'] ?? ''));
+    if (empty($kode_aset)) {
+        $prefix = ($kategori_aset == 'Medis') ? 'RSB-MED' : 'RSB-NON';
+        $kode_aset = sprintf("%s-%03d", $prefix, $id);
+    }
+
+    // Cek jika lokasi berubah, catat riwayat
+    if ($data['lokasi'] !== $lokasi) {
+        $pj = mysqli_real_escape_string($koneksi, $_SESSION['nama_pengguna'] ?? 'Petugas');
+        $lokLama = mysqli_real_escape_string($koneksi, $data['lokasi']);
+        $lokBaru = mysqli_real_escape_string($koneksi, $lokasi);
+        mysqli_query($koneksi, "INSERT INTO riwayat_lokasi (id_aset, lokasi_sebelumnya, lokasi_baru, tanggal_pindah, keterangan, penanggung_jawab) 
+            VALUES ($id, '$lokLama', '$lokBaru', NOW(), 'Diubah melalui form edit aset', '$pj')");
+    }
+
+    $tingkat_prioritas = mysqli_real_escape_string($koneksi, $_POST['tingkat_prioritas'] ?? 'Penting');
+
     $q_update = "UPDATE aset SET 
+                kode_aset = '$kode_aset',
                 nama_aset = '$nama_aset', kategori_aset = '$kategori_aset', 
+                tingkat_prioritas = '$tingkat_prioritas',
                 jenis = '$jenis', tipe_aset = '$tipe_aset', 
                 lokasi = '$lokasi', asal_usul = '$asal_usul', harga = '$harga', 
                 umur_ekonomis = '$umur_ekonomis', tanggal_masuk = '$tanggal_masuk',
@@ -159,15 +178,35 @@ if (isset($_POST['update'])) {
                         <form method="POST" enctype="multipart/form-data">
                             <div class="row">
                                 <div class="col-md-6 mb-3">
+                                    <label class="form-label">Kode Aset / Barcode</label>
+                                    <div class="input-group">
+                                        <input type="text" name="kode_aset" class="form-control font-monospace fw-bold" value="<?= htmlspecialchars($data['kode_aset'] ?? '') ?>" required>
+                                        <a href="cetak_label_qr.php?id=<?= $id ?>" target="_blank" class="btn btn-outline-dark" title="Cetak Label QR">
+                                            <i class="bi bi-qr-code"></i> Cetak Label
+                                        </a>
+                                    </div>
+                                </div>
+                                <div class="col-md-6 mb-3">
                                     <label class="form-label">Nama Aset / Alat</label>
                                     <input type="text" name="nama_aset" class="form-control" required value="<?= htmlspecialchars($data['nama_aset']) ?>">
                                 </div>
+
                                 <div class="col-md-6 mb-3">
                                     <label class="form-label">Kategori</label>
                                     <select name="kategori_aset" class="form-select" required>
                                         <option value="Medis" <?= ($data['kategori_aset'] == 'Medis') ? 'selected' : '' ?>>Medis (Alat Kesehatan)</option>
                                         <option value="Non-Medis" <?= ($data['kategori_aset'] == 'Non-Medis') ? 'selected' : '' ?>>Non-Medis (Infrastruktur Umum)</option>
                                     </select>
+                                </div>
+                                <div class="col-md-6 mb-3">
+                                    <label class="form-label fw-bold">Tingkat Prioritas / Kritikalitas <span class="text-danger">*</span></label>
+                                    <?php $prioCurrent = $data['tingkat_prioritas'] ?? 'Penting'; ?>
+                                    <select name="tingkat_prioritas" class="form-select" required>
+                                        <option value="Kritis" <?= ($prioCurrent == 'Kritis') ? 'selected' : '' ?>>🔴 Kritis (Life-Support / Pelayanan Vital - Respon < 2 Jam)</option>
+                                        <option value="Penting" <?= ($prioCurrent == 'Penting') ? 'selected' : '' ?>>🟡 Penting (Peralatan Diagnostik - Respon < 24 Jam)</option>
+                                        <option value="Rutin" <?= ($prioCurrent == 'Rutin') ? 'selected' : '' ?>>⚪ Rutin (Fasilitas Penunjang Umum - Respon 1-3 Hari)</option>
+                                    </select>
+                                    <small class="text-muted">Aset <strong>Kritis</strong> mendapat prioritas utama pada pemeliharaan preventif & antrean servis.</small>
                                 </div>
                                 <div class="col-md-6 mb-3">
                                     <label class="form-label">Jenis Aset</label>

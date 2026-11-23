@@ -141,6 +141,7 @@ $query = mysqli_query($koneksi, "SELECT * FROM pengguna $where_clause ORDER BY i
                                     <option value="admin" <?= $filter_level == 'admin' ? 'selected' : '' ?>>Admin</option>
                                     <option value="pegawai" <?= $filter_level == 'pegawai' ? 'selected' : '' ?>>Pegawai</option>
                                     <option value="teknisi" <?= $filter_level == 'teknisi' ? 'selected' : '' ?>>Teknisi</option>
+                                    <option value="keuangan" <?= $filter_level == 'keuangan' ? 'selected' : '' ?>>Keuangan</option>
                                 </select>
 
                                 <input type="text" name="search" class="form-control form-control-sm" placeholder="Cari NIP/Nama/Ruangan..." value="<?= htmlspecialchars($search) ?>" style="min-width: 200px;">
@@ -180,7 +181,20 @@ $query = mysqli_query($koneksi, "SELECT * FROM pengguna $where_clause ORDER BY i
                                             <td><span class="badge bg-light text-dark border"><?= htmlspecialchars($row['username']); ?></span></td>
                                             <td><?= htmlspecialchars($row['jabatan'] ?? '-'); ?></td>
                                             <td class="text-start"><i class="bi bi-geo-alt text-danger"></i> <?= htmlspecialchars($row['ruangan'] ?? '-'); ?></td>
-                                            <td><?= htmlspecialchars($row['level']); ?></td>
+                                            <td>
+                                                <?php
+                                                $lvl = strtolower($row['level']);
+                                                if ($lvl == 'admin') {
+                                                    echo '<span class="badge bg-danger">Admin</span>';
+                                                } elseif ($lvl == 'teknisi') {
+                                                    echo '<span class="badge bg-warning text-dark">Teknisi</span>';
+                                                } elseif ($lvl == 'keuangan') {
+                                                    echo '<span class="badge bg-success">Keuangan</span>';
+                                                } else {
+                                                    echo '<span class="badge bg-secondary">Pegawai</span>';
+                                                }
+                                                ?>
+                                            </td>
                                             <td>
                                                 <span class="badge <?= $row['role'] == 'admin' ? 'bg-primary' : 'bg-info text-dark' ?>">
                                                     <?= htmlspecialchars($row['role']); ?>

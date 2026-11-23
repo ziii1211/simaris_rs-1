@@ -35,6 +35,7 @@ $kategori_filter = isset($_GET['kategori']) ? $_GET['kategori'] : 'medis';
 $search = isset($_GET['search']) ? mysqli_real_escape_string($koneksi, $_GET['search']) : "";
 $tahun_filter = isset($_GET['tahun']) ? mysqli_real_escape_string($koneksi, $_GET['tahun']) : "";
 $asal_usul_filter = isset($_GET['asal_usul']) ? mysqli_real_escape_string($koneksi, $_GET['asal_usul']) : "";
+$prioritas_filter = isset($_GET['prioritas']) ? mysqli_real_escape_string($koneksi, $_GET['prioritas']) : "";
 
 $whereConditions = [];
 
@@ -60,6 +61,11 @@ if ($asal_usul_filter != '') {
     $whereConditions[] = "asal_usul = '$asal_usul_filter'";
 }
 
+// Filter berdasarkan Prioritas
+if ($prioritas_filter != '') {
+    $whereConditions[] = "tingkat_prioritas = '$prioritas_filter'";
+}
+
 $whereClause = "";
 if (count($whereConditions) > 0) {
     $whereClause = "WHERE " . implode(" AND ", $whereConditions);
@@ -70,9 +76,10 @@ $url_params = "";
 if ($search != '') $url_params .= '&search=' . urlencode($search);
 if ($tahun_filter != '') $url_params .= '&tahun=' . urlencode($tahun_filter);
 if ($asal_usul_filter != '') $url_params .= '&asal_usul=' . urlencode($asal_usul_filter);
+if ($prioritas_filter != '') $url_params .= '&prioritas=' . urlencode($prioritas_filter);
 
 // Ambil data dengan limit, offset, dan filter
-$query = mysqli_query($koneksi, "SELECT * FROM aset $whereClause ORDER BY id_aset ASC LIMIT $limit OFFSET $offset");
+$query = mysqli_query($koneksi, "SELECT * FROM aset $whereClause ORDER BY FIELD(tingkat_prioritas, 'Kritis', 'Penting', 'Rutin') ASC, id_aset ASC LIMIT $limit OFFSET $offset");
 // Hitung total data untuk paginasi
 $countQuery = mysqli_query($koneksi, "SELECT COUNT(*) as total FROM aset $whereClause");
 $total_row = mysqli_fetch_assoc($countQuery);
@@ -255,7 +262,7 @@ while ($row = mysqli_fetch_assoc($query)) {
 
         <div id="page-content-wrapper">
             <div class="dashboard-header">
-                <h4 class="fw-bold m-0"><i class="bi bi-box-seam"></i> MANAJEMEN ASET / INFRASTRUKTUR</h4>
+                <h4 class="fw-bold m-0"><i class="bi bi-box-seam me-2"></i> MANAJEMEN ASET RUMAH SAKIT (SARANA & ALKES BERGERAK)</h4>
                 <div class="small fw-medium">
                     <i class="bi bi-person-circle-fill"></i> <?= htmlspecialchars($_SESSION['nama_pengguna']); ?>
                     <span class="badge bg-light text-dark ms-1" style="text-transform: uppercase;"><?= htmlspecialchars($_SESSION['level']); ?></span>
@@ -291,6 +298,13 @@ while ($row = mysqli_fetch_assoc($query)) {
                                         <option value="Hibah" <?= ($asal_usul_filter == 'Hibah') ? 'selected' : '' ?>>Hibah</option>
                                         <option value="Sewa" <?= ($asal_usul_filter == 'Sewa') ? 'selected' : '' ?>>Sewa</option>
                                     </select>
+
+                                    <select name="prioritas" class="form-select form-select-sm bg-light text-dark border-0" style="border-radius: 6px; cursor: pointer; width: 140px;">
+                                        <option value="">Semua Prioritas</option>
+                                        <option value="Kritis" <?= ($prioritas_filter == 'Kritis') ? 'selected' : '' ?>>🔴 Kritis (Life-Support)</option>
+                                        <option value="Penting" <?= ($prioritas_filter == 'Penting') ? 'selected' : '' ?>>🟡 Penting (Diagnostik)</option>
+                                        <option value="Rutin" <?= ($prioritas_filter == 'Rutin') ? 'selected' : '' ?>>⚪ Rutin (Umum)</option>
+                                    </select>
                                 </div>
 
                                 <div class="input-group input-group-sm" style="width: 200px;">
@@ -303,12 +317,21 @@ while ($row = mysqli_fetch_assoc($query)) {
                                 </div>
                             </form>
 
-                            <div class="d-flex gap-2">
-                                <a href="aset_tambah.php" class="btn btn-light btn-sm text-nowrap" style="border-radius: 6px;">
+                            <div class="d-flex gap-2 flex-wrap align-items-center">
+                                <button type="button" class="btn btn-warning btn-sm text-dark fw-bold text-nowrap shadow-sm" data-bs-toggle="modal" data-bs-target="#modalMatriksPerbedaan" style="border-radius: 6px;">
+                                    <i class="bi bi-diagram-3-fill me-1"></i> Perbedaan Aset vs Infrastruktur
+                                </button>
+                                <a href="scan_aset.php" class="btn btn-dark btn-sm text-white fw-bold text-nowrap" style="border-radius: 6px;">
+                                    <i class="bi bi-qr-code-scan"></i> Scan QR
+                                </a>
+                                <a href="cetak_label_qr.php?kategori=<?= $kategori_filter ?><?= $url_params ?>" target="_blank" class="btn btn-secondary btn-sm text-nowrap" style="border-radius: 6px;">
+                                    <i class="bi bi-qr-code"></i> Cetak Label QR
+                                </a>
+                                <a href="aset_tambah.php" class="btn btn-success btn-sm text-nowrap fw-bold" style="border-radius: 6px;">
                                     <i class="bi bi-plus-lg"></i> Tambah
                                 </a>
                                 <a href="aset_cetak.php?kategori=<?= $kategori_filter ?><?= $url_params ?>"
-                                    target="_blank" class="btn btn-light btn-sm text-nowrap" style="border-radius: 6px;">
+                                    target="_blank" class="btn btn-outline-danger btn-sm text-nowrap" style="border-radius: 6px;">
                                     <i class="bi bi-file-earmark-pdf"></i> Cetak PDF
                                 </a>
                             </div>
@@ -341,8 +364,10 @@ while ($row = mysqli_fetch_assoc($query)) {
                             <table class="table table-bordered table-hover text-center align-middle">
                                 <thead>
                                     <tr>
-                                        <th style="width: 50px;">No</th>
+                                        <th style="width: 45px;">No</th>
+                                        <th style="width: 120px;">Kode Aset</th>
                                         <th>Nama Aset</th>
+                                        <th style="width: 110px;">Prioritas</th>
                                         <th>Kategori</th>
                                         <th>Jenis</th>
                                         <th>Tipe</th>
@@ -354,22 +379,40 @@ while ($row = mysqli_fetch_assoc($query)) {
                                         <th>Umur Eko.</th>
                                         <th>Tanggal Masuk</th>
                                         <th>Dokumen</th>
-                                        <th style="width: 100px;">Aksi</th>
+                                        <th style="width: 140px;">Aksi</th>
                                     </tr>
                                 </thead>
                                 <tbody>
                                     <?php if (empty($aset_list)): ?>
                                         <tr>
-                                            <td colspan="14" class="text-muted py-5 text-center">
+                                            <td colspan="16" class="text-muted py-5 text-center">
                                                 <i class="bi bi-inboxes text-secondary d-block mb-2" style="font-size: 2rem;"></i>
                                                 Data untuk kategori ini belum tersedia atau tidak ditemukan.
                                             </td>
                                         </tr>
                                     <?php else: ?>
-                                        <?php foreach ($aset_list as $i => $a): ?>
-                                            <tr>
+                                        <?php foreach ($aset_list as $i => $a): 
+                                            $prioA = $a['tingkat_prioritas'] ?? 'Penting';
+                                            $isKritis = ($prioA === 'Kritis');
+                                        ?>
+                                            <tr style="<?= $isKritis ? 'background-color: #fff9f9;' : '' ?>">
                                                 <td class="text-secondary"><?= (($page - 1) * $limit) + $i + 1 ?></td>
+                                                <td>
+                                                    <a href="detail_aset_qr.php?kode=<?= urlencode($a['kode_aset'] ?? '') ?>" class="badge bg-dark font-monospace text-info text-decoration-none px-2 py-1" style="font-size: 0.8rem;" title="Klik untuk verifikasi & detail QR">
+                                                        <i class="bi bi-qr-code me-1"></i><?= htmlspecialchars($a['kode_aset'] ?? '-') ?>
+                                                    </a>
+                                                </td>
                                                 <td class="fw-bold text-dark text-start"><?= htmlspecialchars($a['nama_aset']) ?></td>
+
+                                                <td>
+                                                    <?php if ($prioA === 'Kritis'): ?>
+                                                        <span class="badge bg-danger shadow-sm"><i class="bi bi-exclamation-triangle-fill"></i> Kritis</span>
+                                                    <?php elseif ($prioA === 'Penting'): ?>
+                                                        <span class="badge bg-warning text-dark"><i class="bi bi-shield"></i> Penting</span>
+                                                    <?php else: ?>
+                                                        <span class="badge bg-secondary"><i class="bi bi-check-circle"></i> Rutin</span>
+                                                    <?php endif; ?>
+                                                </td>
 
                                                 <td>
                                                     <?php if (isset($a['kategori_aset']) && $a['kategori_aset'] == 'Medis'): ?>
@@ -383,7 +426,11 @@ while ($row = mysqli_fetch_assoc($query)) {
 
                                                 <td><?= htmlspecialchars($a['jenis']) ?></td>
                                                 <td><?= htmlspecialchars($a['tipe_aset']) ?></td>
-                                                <td class="text-start"><i class="bi bi-geo-alt text-danger me-1"></i><?= htmlspecialchars($a['lokasi']) ?></td>
+                                                <td class="text-start">
+                                                    <a href="infrastruktur_detail.php?ruangan=<?= urlencode($a['lokasi']) ?>" class="text-dark fw-semibold text-decoration-none" title="Klik untuk melihat profil infrastruktur / ruangan ini">
+                                                        <i class="bi bi-building text-primary me-1"></i><?= htmlspecialchars($a['lokasi']) ?>
+                                                    </a>
+                                                </td>
 
                                                 <td class="text-center">
                                                     <div class="fw-bold text-primary" style="font-size: 1.1rem;">
@@ -426,6 +473,12 @@ while ($row = mysqli_fetch_assoc($query)) {
 
                                                 <td>
                                                     <div class="btn-action-group">
+                                                        <a href="detail_aset_qr.php?kode=<?= urlencode($a['kode_aset'] ?? '') ?>" class="btn btn-dark btn-sm-custom" title="Detail QR & Mutasi Cepat">
+                                                            <i class="bi bi-qr-code"></i>
+                                                        </a>
+                                                        <a href="cetak_label_qr.php?id=<?= $a['id_aset'] ?>" target="_blank" class="btn btn-secondary btn-sm-custom" title="Cetak Stiker Label QR">
+                                                            <i class="bi bi-printer"></i>
+                                                        </a>
                                                         <a href="aset_edit.php?id=<?= $a['id_aset'] ?>" class="btn btn-warning text-white btn-sm-custom" title="Edit Data">
                                                             <i class="bi bi-pencil-square"></i>
                                                         </a>
@@ -438,6 +491,7 @@ while ($row = mysqli_fetch_assoc($query)) {
                                             </tr>
                                         <?php endforeach; ?>
                                     <?php endif; ?>
+
                                 </tbody>
                             </table>
                         </div>
@@ -468,6 +522,11 @@ while ($row = mysqli_fetch_assoc($query)) {
             </div>
         </div>
     </div>
+
+    <!-- INCLUDE MODAL MATRIKS PERBEDAAN ASET VS INFRASTRUKTUR -->
+    <?php include(__DIR__ . '/modal_perbedaan_aset_infrastruktur.php'); ?>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.1/dist/js/bootstrap.bundle.min.js"></script>
 </body>
 
 </html>

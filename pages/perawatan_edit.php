@@ -21,10 +21,13 @@ if (isset($_POST['update'])) {
     $teknisi       = mysqli_real_escape_string($koneksi, $_POST['teknisi']);
     $tanggal       = mysqli_real_escape_string($koneksi, $_POST['tanggal']);
     $status        = mysqli_real_escape_string($koneksi, $_POST['status']);
+    $jenis_pemeliharaan    = mysqli_real_escape_string($koneksi, $_POST['jenis_pemeliharaan'] ?? 'Preventif Rutin');
+    $tindakan_pemeliharaan = mysqli_real_escape_string($koneksi, $_POST['tindakan_pemeliharaan'] ?? '');
+    $biaya_pemeliharaan    = floatval($_POST['biaya_pemeliharaan'] ?? 0);
 
     // [PERBAIKAN ERROR TANGGAL] 
     // Jika input tanggal kosong, atur nilainya jadi NULL di database agar tidak error
-    $tgl_k_input   = $_POST['tanggal_kalibrasi_berikutnya'];
+    $tgl_k_input   = $_POST['tanggal_kalibrasi_berikutnya'] ?? '';
     $tgl_kalibrasi = !empty($tgl_k_input) ? "'" . mysqli_real_escape_string($koneksi, $tgl_k_input) . "'" : "NULL";
 
     // Update tabel perawatan
@@ -33,25 +36,32 @@ if (isset($_POST['update'])) {
         petugas_kalibrasi='$teknisi', 
         tanggal='$tanggal', 
         tanggal_kalibrasi_berikutnya=$tgl_kalibrasi, 
+        jenis_pemeliharaan='$jenis_pemeliharaan',
+        tindakan_pemeliharaan='$tindakan_pemeliharaan',
+        biaya_pemeliharaan='$biaya_pemeliharaan',
         status='$status' 
         WHERE id=$id");
 
     // ================= AUTO SYNC KE TABEL MASTER DAN TABEL KERUSAKAN USER =================
     if ($update) {
+        if (!empty($tgl_k_input)) {
+            mysqli_query($koneksi, "UPDATE aset SET jadwal_maintenance_berikutnya='$tgl_k_input' WHERE nama_aset='$nama_aset'");
+        }
+
         if ($status == "Selesai") {
             mysqli_query($koneksi, "UPDATE aset SET kondisi='Baik' WHERE nama_aset='$nama_aset'");
 
             // Sinkronkan data di riwayat user (tabel kerusakan) menjadi Selesai juga!
-            mysqli_query($koneksi, "UPDATE kerusakan SET status='Selesai Diperbaiki' WHERE nama_aset='$nama_aset' AND teknisi='Ahmad Fauzi' AND status!='Selesai Diperbaiki'");
+            mysqli_query($koneksi, "UPDATE kerusakan SET status='Selesai Diperbaiki' WHERE nama_aset='$nama_aset' AND status!='Selesai Diperbaiki'");
         } else {
             mysqli_query($koneksi, "UPDATE aset SET kondisi='Perlu Perawatan' WHERE nama_aset='$nama_aset'");
 
             // Sinkronkan data di riwayat user menjadi Sedang Proses
-            mysqli_query($koneksi, "UPDATE kerusakan SET status='Dalam Perbaikan' WHERE nama_aset='$nama_aset' AND teknisi='Ahmad Fauzi' AND status!='Selesai Diperbaiki'");
+            mysqli_query($koneksi, "UPDATE kerusakan SET status='Dalam Perbaikan' WHERE nama_aset='$nama_aset' AND status!='Selesai Diperbaiki'");
         }
-        echo "<script>alert('Data perawatan & kalibrasi berhasil diperbarui!');window.location='perawatan.php';</script>";
+        echo "<script>alert('Data perawatan & pemeliharaan berhasil diperbarui!');window.location='perawatan.php';</script>";
     } else {
-        echo "<script>alert('Gagal mengupdate data!');</script>";
+        echo "<script>alert('Gagal mengupdate data: " . mysqli_error($koneksi) . "');</script>";
     }
 }
 ?>
@@ -162,13 +172,34 @@ if (isset($_POST['update'])) {
 
                             <div class="row">
                                 <div class="col-md-6 mb-3">
+                                    <label class="form-label fw-bold">Jenis Pemeliharaan</label>
+                                    <select name="jenis_pemeliharaan" class="form-select" required>
+                                        <option value="Preventif Rutin" <?= ($p['jenis_pemeliharaan'] ?? '') == 'Preventif Rutin' ? 'selected' : '' ?>>Preventif Rutin (Pembersihan/Pelumasan)</option>
+                                        <option value="Kalibrasi Berkala" <?= ($p['jenis_pemeliharaan'] ?? '') == 'Kalibrasi Berkala' ? 'selected' : '' ?>>Kalibrasi Berkala (Standar Akreditasi)</option>
+                                        <option value="Uji Fungsi & Keselamatan" <?= ($p['jenis_pemeliharaan'] ?? '') == 'Uji Fungsi & Keselamatan' ? 'selected' : '' ?>>Uji Fungsi & Keselamatan Kelistrikan</option>
+                                        <option value="Breakdown Maintenance" <?= ($p['jenis_pemeliharaan'] ?? '') == 'Breakdown Maintenance' ? 'selected' : '' ?>>Breakdown Maintenance (Perbaikan Insidental)</option>
+                                    </select>
+                                </div>
+                                <div class="col-md-6 mb-3">
+                                    <label class="form-label fw-bold">Biaya Pemeliharaan (Rp)</label>
+                                    <input type="number" name="biaya_pemeliharaan" class="form-control" value="<?= htmlspecialchars((int)($p['biaya_pemeliharaan'] ?? 0)) ?>" min="0" step="5000">
+                                </div>
+                            </div>
+
+                            <div class="row">
+                                <div class="col-md-6 mb-3">
                                     <label class="form-label fw-bold">Tgl Perawatan Saat Ini</label>
                                     <input type="date" name="tanggal" class="form-control" value="<?= htmlspecialchars($p['tanggal']) ?>" required>
                                 </div>
-                                <div class="col-md-6 mb-4">
-                                    <label class="form-label fw-bold text-danger">Jadwal Kalibrasi Berikutnya</label>
+                                <div class="col-md-6 mb-3">
+                                    <label class="form-label fw-bold text-danger">Jadwal Kalibrasi/Servis Berikutnya</label>
                                     <input type="date" name="tanggal_kalibrasi_berikutnya" class="form-control border-danger" value="<?= htmlspecialchars($p['tanggal_kalibrasi_berikutnya'] == '0000-00-00' ? '' : $p['tanggal_kalibrasi_berikutnya']) ?>">
                                 </div>
+                            </div>
+
+                            <div class="mb-3">
+                                <label class="form-label fw-bold text-success"><i class="bi bi-clipboard2-pulse me-1"></i> Rincian Tindakan Pemeliharaan / Uji Fungsi</label>
+                                <textarea name="tindakan_pemeliharaan" class="form-control" rows="3" placeholder="Contoh: Kalibrasi defleksi sinar, uji arus bocor (leakage current), penggantian seal gasket filter..."><?= htmlspecialchars($p['tindakan_pemeliharaan'] ?? '') ?></textarea>
                             </div>
 
                             <div class="mb-4">

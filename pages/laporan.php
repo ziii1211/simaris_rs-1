@@ -72,9 +72,44 @@ function getCount($koneksi, $jenis, $tahun)
             $join = 'JOIN aset ON riwayat_lokasi.id_aset = aset.id_aset';
             $col_date = 'riwayat_lokasi.tanggal_pindah';
             break;
+        case 'infrastruktur':
+            $table = 'infrastruktur';
+            $col_date = 'created_at';
+            break;
+        case 'penyusutan_periode':
+            $table = 'aset';
+            $where[] = "harga > 0";
+            $col_date = 'tanggal_masuk';
+            break;
+        case 'stock_opname':
+            $table = 'stock_opname';
+            $col_date = 'tanggal_opname';
+            break;
+        case 'sebaran_ruangan':
+            $sql = "SELECT COUNT(DISTINCT lokasi) as total FROM aset WHERE lokasi IS NOT NULL AND lokasi != ''";
+            $res = mysqli_query($koneksi, $sql);
+            $row = mysqli_fetch_assoc($res);
+            return (int)($row['total'] ?? 0);
+        case 'analisis_anggaran':
+            $sql = "SELECT COUNT(*) as total FROM aset WHERE harga > 0";
+            $res = mysqli_query($koneksi, $sql);
+            $row = mysqli_fetch_assoc($res);
+            return (int)($row['total'] ?? 0);
+        case 'prioritas_kritis':
+            $sql = "SELECT COUNT(*) as total FROM aset WHERE tingkat_prioritas = 'Kritis'";
+            $res = mysqli_query($koneksi, $sql);
+            $row = mysqli_fetch_assoc($res);
+            return (int)($row['total'] ?? 0);
+        case 'monitoring_pemeliharaan':
+            $sql = "SELECT COUNT(*) as total FROM aset";
+            $res = mysqli_query($koneksi, $sql);
+            $row = mysqli_fetch_assoc($res);
+            return (int)($row['total'] ?? 0);
         default:
             return 0;
     }
+
+
 
     // Filter berdasarkan tahun jika dipilih
     if (!empty($tahun)) {
@@ -122,7 +157,26 @@ $laporan_list = [
     ['Laporan Kalibrasi', getCount($koneksi, 'kalibrasi', $tahun_filter), $periode_text],
 
     // FITUR BARU
-    ['Laporan Pelacakan Lokasi Aset', getCount($koneksi, 'pelacakan_lokasi', $tahun_filter), $periode_text]
+    ['Laporan Pelacakan Lokasi Aset', getCount($koneksi, 'pelacakan_lokasi', $tahun_filter), $periode_text],
+
+    // REVISI SIDANG: LAPORAN INFRASTRUKTUR
+    ['Laporan Infrastruktur (Gedung & Kamar)', getCount($koneksi, 'infrastruktur', $tahun_filter), $periode_text],
+
+    // REVISI SIDANG: PENYUSUTAN PERIODIK & STOCK OPNAME
+    ['Laporan Penyusutan Nilai Aset (Per Periode)', getCount($koneksi, 'penyusutan_periode', $tahun_filter), $periode_text],
+    ['Laporan Hasil Stock Opname (Sistem vs Fisik)', getCount($koneksi, 'stock_opname', $tahun_filter), $periode_text],
+
+    // REVISI SIDANG: QR CODE & SEBARAN RUANGAN (KIR)
+    ['Kartu Inventaris Ruangan (KIR) & Sebaran', getCount($koneksi, 'sebaran_ruangan', $tahun_filter), $periode_text],
+
+    // REVISI SIDANG: ANALISIS ASET & PERENCANAAN ANGGARAN (DSS)
+    ['Laporan Analisis Aset & Perencanaan Anggaran', getCount($koneksi, 'analisis_anggaran', $tahun_filter), $periode_text],
+
+    // REVISI SIDANG: KLASIFIKASI TINGKAT PRIORITAS ASET & PEMELIHARAAN
+    ['Laporan Prioritas & Klasifikasi Pemeliharaan', getCount($koneksi, 'prioritas_kritis', $tahun_filter), $periode_text],
+
+    // REVISI SIDANG: MONITORING KONDISI & PEMELIHARAAN ASET BERKALA
+    ['Laporan Monitoring Kondisi & Pemeliharaan', getCount($koneksi, 'monitoring_pemeliharaan', $tahun_filter), $periode_text]
 ];
 
 // =======================
@@ -136,7 +190,7 @@ $total_proses = 0;
 foreach ($laporan_list as $l) {
     if ($l[0] === 'Laporan Perawatan Berjalan') {
         $total_proses += $l[1];
-    } elseif ($l[0] === 'Laporan Kalibrasi' || $l[0] === 'Laporan Pelacakan Lokasi Aset') {
+    } elseif ($l[0] === 'Laporan Kalibrasi' || $l[0] === 'Laporan Pelacakan Lokasi Aset' || $l[0] === 'Kartu Inventaris Ruangan (KIR) & Sebaran' || $l[0] === 'Laporan Analisis Aset & Perencanaan Anggaran' || $l[0] === 'Laporan Prioritas & Klasifikasi Pemeliharaan' || $l[0] === 'Laporan Monitoring Kondisi & Pemeliharaan') {
         $total_monitoring += $l[1];
     } else {
         $total_selesai += $l[1];
@@ -168,10 +222,26 @@ function getReportLink($jenis)
             // LINK BARU
         case 'Laporan Pelacakan Lokasi Aset':
             return 'laporan_pelacakan.php';
+        case 'Laporan Infrastruktur (Gedung & Kamar)':
+            return 'laporan_infrastruktur.php';
+        case 'Laporan Penyusutan Nilai Aset (Per Periode)':
+            return 'laporan_penyusutan_periode.php';
+        case 'Laporan Hasil Stock Opname (Sistem vs Fisik)':
+            return 'laporan_stock_opname.php';
+        case 'Kartu Inventaris Ruangan (KIR) & Sebaran':
+            return 'sebaran_aset.php';
+        case 'Laporan Analisis Aset & Perencanaan Anggaran':
+            return 'analisis_aset.php';
+        case 'Laporan Prioritas & Klasifikasi Pemeliharaan':
+            return 'prioritas_pemeliharaan.php';
+        case 'Laporan Monitoring Kondisi & Pemeliharaan':
+            return 'monitoring_pemeliharaan.php';
         default:
             return '#';
     }
 }
+
+
 ?>
 
 <!DOCTYPE html>
@@ -318,7 +388,8 @@ function getReportLink($jenis)
                                         $status = 'Sedang Proses';
                                     } elseif (
                                         $l[0] === 'Laporan Kalibrasi' ||
-                                        $l[0] === 'Laporan Pelacakan Lokasi Aset'
+                                        $l[0] === 'Laporan Pelacakan Lokasi Aset' ||
+                                        $l[0] === 'Laporan Monitoring Kondisi & Pemeliharaan'
                                     ) {
                                         $status = 'Monitoring';
                                     } else {

@@ -114,17 +114,23 @@ $is_ahmad = (strpos(strtolower($nama_user), 'ahmad') !== false);
             <i class="bi bi-speedometer2"></i> Dashboard
         </a>
 
-        <?php if ($is_budi) : ?>
+        <?php if ($is_budi || (!$is_budi && !$is_ahmad)) : ?>
             <div class="menu-category">Manajemen Perbaikan</div>
             <a href="kerusakan.php" class="list-group-item">
                 <i class="bi bi-exclamation-octagon"></i> Laporan Kerusakan
             </a>
         <?php endif; ?>
 
-        <?php if ($is_ahmad) : ?>
+        <?php if ($is_ahmad || (!$is_budi && !$is_ahmad)) : ?>
             <div class="menu-category">Manajemen Pemeliharaan</div>
             <a href="perawatan.php" class="list-group-item">
-                <i class="bi bi-tools"></i> Jadwal Perawatan/Pemiliharaan Dan Kalibrasi Rutin
+                <i class="bi bi-tools"></i> Jadwal Perawatan & Kalibrasi
+            </a>
+            <a href="monitoring_pemeliharaan.php" class="list-group-item">
+                <i class="bi bi-activity text-info"></i> Monitoring Pemeliharaan
+            </a>
+            <a href="prioritas_pemeliharaan.php" class="list-group-item">
+                <i class="bi bi-shield-fill-check text-warning"></i> Prioritas Alkes Kritis
             </a>
         <?php endif; ?>
 

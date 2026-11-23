@@ -75,7 +75,7 @@ if ($status_filter != '') $url_params .= '&status=' . urlencode($status_filter);
 $count_query = mysqli_query($koneksi, "
     SELECT COUNT(*) as total 
     FROM kerusakan 
-    LEFT JOIN aset ON kerusakan.nama_aset = aset.nama_aset
+    LEFT JOIN aset ON kerusakan.nama_aset COLLATE utf8mb4_general_ci = aset.nama_aset COLLATE utf8mb4_general_ci
     $whereClause
 ");
 
@@ -91,11 +91,12 @@ $query = mysqli_query($koneksi, "
         aset.lokasi,
         aset.stok_tersedia,
         aset.stok_rusak,
-        aset.stok_perawatan
+        aset.stok_perawatan,
+        COALESCE(aset.tingkat_prioritas, 'Penting') as tingkat_prioritas
     FROM kerusakan 
-    LEFT JOIN aset ON kerusakan.nama_aset = aset.nama_aset
+    LEFT JOIN aset ON kerusakan.nama_aset COLLATE utf8mb4_general_ci = aset.nama_aset COLLATE utf8mb4_general_ci
     $whereClause
-    ORDER BY kerusakan.id DESC
+    ORDER BY FIELD(COALESCE(aset.tingkat_prioritas, 'Penting'), 'Kritis', 'Penting', 'Rutin') ASC, kerusakan.id DESC
     LIMIT $offset, $limit
 ");
 ?>
@@ -371,8 +372,10 @@ $query = mysqli_query($koneksi, "
                                     <th>Pelapor</th>
                                     <th>Tanggal Lapor</th>
                                     <th>Rincian Kerusakan</th>
+                                    <th>Tingkat Urgensi</th>
                                     <th>Teknisi Perbaikan</th>
                                     <th>Status Laporan</th>
+                                    <th>Biaya Perbaikan</th>
                                     <th>Aksi</th>
                                 </tr>
                             </thead>
@@ -382,7 +385,8 @@ $query = mysqli_query($koneksi, "
                                 <?php if (mysqli_num_rows($query) == 0): ?>
 
                                     <tr>
-                                        <td colspan="10" class="text-center text-muted py-5">
+                                        <td colspan="12" class="text-center text-muted py-5">
+
                                             <i class="bi bi-inboxes d-block mb-2" style="font-size: 2rem;"></i>
                                             Tidak ada data laporan kerusakan yang sesuai filter.
                                         </td>
@@ -392,13 +396,21 @@ $query = mysqli_query($koneksi, "
 
                                     <?php $no = $offset + 1; ?>
 
-                                    <?php while ($row = mysqli_fetch_assoc($query)): ?>
+                                    <?php while ($row = mysqli_fetch_assoc($query)): 
+                                        $prioAset = $row['tingkat_prioritas'] ?? 'Penting';
+                                        $isKritis = ($prioAset === 'Kritis');
+                                    ?>
 
-                                        <tr>
+                                        <tr style="<?= $isKritis ? 'background-color: #fff5f5;' : '' ?>">
 
                                             <td><?= $no++ ?></td>
 
                                             <td class="text-start">
+                                                <?php if ($isKritis): ?>
+                                                    <span class="badge bg-danger text-white mb-1 d-inline-block shadow-sm" style="font-size: 10px;">
+                                                        <i class="bi bi-exclamation-triangle-fill"></i> KRITIS / LIFE SUPPORT
+                                                    </span>
+                                                <?php endif; ?>
                                                 <span class="fw-bold d-block mb-1 text-dark">
                                                     <?= htmlspecialchars($row['nama_aset']) ?>
                                                 </span>
@@ -442,6 +454,19 @@ $query = mysqli_query($koneksi, "
                                                 <?= htmlspecialchars($row['keterangan']) ?>
                                             </td>
 
+                                            <td>
+                                                <?php if ($isKritis): ?>
+                                                    <span class="badge bg-danger shadow-sm py-1 px-2">
+                                                        <i class="bi bi-bell-fill"></i> PRIORITAS 1
+                                                    </span>
+                                                    <div class="text-danger fw-bold mt-1" style="font-size: 10px;">Respon < 2 Jam</div>
+                                                <?php else: ?>
+                                                    <span class="badge bg-secondary">
+                                                        <?= htmlspecialchars($row['tingkat_Urgensi'] ?? 'Normal') ?>
+                                                    </span>
+                                                <?php endif; ?>
+                                            </td>
+
                                             <td class="fw-medium text-primary">
                                                 <?= htmlspecialchars($row['teknisi'] ?? '-') ?>
                                             </td>
@@ -469,7 +494,12 @@ $query = mysqli_query($koneksi, "
 
                                             </td>
 
+                                            <td class="text-end fw-bold text-dark">
+                                                <?= !empty($row['biaya_perbaikan']) && $row['biaya_perbaikan'] > 0 ? 'Rp ' . number_format($row['biaya_perbaikan'], 0, ',', '.') : '<span class="text-muted">-</span>' ?>
+                                            </td>
+
                                             <td>
+
 
                                                 <div class="d-flex gap-1 justify-content-center">
 

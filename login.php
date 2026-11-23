@@ -29,12 +29,16 @@ if (isset($_POST['login'])) {
                 // Gunakan prioritas 'level' dari database
                 $_SESSION['level'] = $user['level'];
                 $_SESSION['role'] = $user['role'];
+                $_SESSION['nip'] = $user['nip'] ?? '';
+                $_SESSION['jabatan'] = $user['jabatan'] ?? '';
 
                 // --- INI KUNCI ARAHANNYA ---
                 if ($user['level'] == 'admin' || $user['role'] == 'admin') {
                     header("Location: pages/dashboard.php");
                 } elseif ($user['level'] == 'teknisi' || $user['role'] == 'teknisi') {
                     header("Location: pages/dashboard_teknisi.php");
+                } elseif ($user['level'] == 'keuangan') {
+                    header("Location: pages/dashboard_keuangan.php");
                 } else {
                     header("Location: pages/dashboard_user.php");
                 }

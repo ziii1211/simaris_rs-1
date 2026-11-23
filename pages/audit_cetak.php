@@ -7,6 +7,7 @@ if (!isset($_SESSION['id_pengguna'])) {
 
 require('../config/fpdf.php');
 include('../config/koneksi.php');
+require_once(__DIR__ . '/../config/ttd_helper.php');
 
 /* ================= FILTER & PENCARIAN (SINKRON DENGAN HALAMAN UTAMA) ================= */
 $search = isset($_GET['search']) ? mysqli_real_escape_string($koneksi, $_GET['search']) : "";
@@ -55,31 +56,7 @@ $pdf->SetAutoPageBreak(false); // Dimatikan agar page break dikontrol manual unt
 $pdf->AddPage();
 
 // ==================== HEADER KOP SURAT ==================== //
-$logoLeft  = realpath(__DIR__ . '/../assets/img/logo_dokpol.png');
-$logoRight = realpath(__DIR__ . '/../assets/img/logo_rs.jpg');
-
-if (file_exists($logoLeft)) {
-    $pdf->Image($logoLeft, 15, 8, 25);
-}
-
-if (file_exists($logoRight)) {
-    $pdf->Image($logoRight, 252, 8, 25);
-}
-
-// Nama RS
-$pdf->SetFont('Arial', 'B', 16);
-$pdf->SetXY(0, 12);
-$pdf->Cell(0, 6, 'RUMKIT BHAYANGKARA TK. III BANJARMASIN', 0, 1, 'C');
-
-$pdf->SetFont('Arial', '', 12);
-$pdf->Cell(0, 6, 'Jl. A. Yani Km. 3,5 Banjarmasin 70235', 0, 1, 'C');
-
-// Judul
-$pdf->SetY(34);
-$pdf->SetFont('Arial', 'B', 15);
-$pdf->Cell(0, 10, 'LAPORAN AUDIT FISIK ASET', 0, 1, 'C');
-
-$pdf->Ln(3);
+renderOfficialKopSurat($pdf, 'L');
 
 // ==================== TABLE HEADER ==================== //
 // Penyesuaian Lebar Kolom (Total: ~277mm untuk fit di kertas A4 Landscape)
@@ -208,5 +185,8 @@ $pdf->Cell(
 );
 
 // ==================== OUTPUT ==================== //
+// ==================== TANDA TANGAN (2 KOLOM) ==================== //
+renderReportSignature($pdf, $koneksi);
+
 $pdf->Output('I', 'laporan_audit_fisik.pdf');
 exit;

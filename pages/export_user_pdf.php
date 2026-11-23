@@ -7,6 +7,7 @@ if (!isset($_SESSION['id_pengguna'])) {
 
 require('../config/fpdf.php');
 include('../config/koneksi.php');
+require_once(__DIR__ . '/../config/ttd_helper.php');
 
 // Filter search & level jika ada
 $search = isset($_GET['search']) ? mysqli_real_escape_string($koneksi, $_GET['search']) : '';
@@ -96,5 +97,8 @@ while ($row = mysqli_fetch_assoc($result)) {
     $pdf->Cell($widths[4], 10, ucfirst($row['role']), 1, 0, 'C');
     $pdf->Cell($widths[5], 10, $row['status'] ?? 'aktif', 1, 1, 'C');
 }
+
+// ==================== TANDA TANGAN (2 KOLOM) ==================== //
+renderReportSignature($pdf, $koneksi);
 
 $pdf->Output();

@@ -178,6 +178,16 @@ if (isset($_POST['simpan'])) {
                                     <?php endwhile; ?>
                                 </select>
                             </div>
+                            <div class="col-md-4 mb-4">
+                                <label class="form-label">Pilih Urgensi</label>
+                                <label for="tingkat_urgensi" class="form-label"></label>
+                                <select name="tingkatan_urgensi" id="tingkatan_urgensi" class="form-select">
+                                    <option value="Rendah">Rendah</option>
+                                    <option value="Normal" selected>Normal</option>
+                                    <option value="Tinggi">Tinggi</option>
+                                    <option value="Kritis">Kritis</option>
+                                </select>
+                            </div>
 
                             <div class="row">
                                 <div class="col-md-6 mb-4">
